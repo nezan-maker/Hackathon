@@ -11,12 +11,6 @@ const debug = createDebug("app:payment");
 
 export const createPaymentIntent = async (req, res) => {
   try {
-    if (!isStripeEnabled()) {
-      return res.status(503).json({
-        message: "Stripe payment provider is not configured",
-      });
-    }
-
     const { serial_id } = req.body || {};
     const user = req.user;
 
@@ -48,6 +42,24 @@ export const createPaymentIntent = async (req, res) => {
     }
 
     const amountUsd = calculatePumpPrice(pump.capacity);
+
+    if (!isStripeEnabled()) {
+      if (env.allowCardlessPurchases) {
+        return res.status(200).json({
+          message: "Cardless fallback mode is enabled",
+          payment_provider: "simulated",
+          card_required: false,
+          amount_usd: amountUsd,
+          currency: "usd",
+          serial_id: pump.serial_id,
+        });
+      }
+
+      return res.status(503).json({
+        message: "Stripe payment provider is not configured",
+      });
+    }
+
     const intent = await createPumpPaymentIntent({
       amountUsd,
       serialId: pump.serial_id,
@@ -61,6 +73,7 @@ export const createPaymentIntent = async (req, res) => {
       payment_intent_id: intent.id,
       client_secret: intent.client_secret,
       publishable_key: env.stripePublishableKey,
+      card_required: true,
       amount_usd: amountUsd,
       currency: "usd",
       serial_id: pump.serial_id,

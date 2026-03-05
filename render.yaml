@@ -20,11 +20,11 @@ services:
       - key: REFRESH_SECRET
         sync: false
       - key: FRONTEND_APP_URL
-        value: https://flowbot-frontend.onrender.com
+        value: https://flowbot.onrender.com
       - key: BACKEND_APP_URL
         value: https://flowbot-backend.onrender.com
       - key: CORS_ORIGINS
-        value: https://flowbot-frontend.onrender.com
+        value: https://flowbot.onrender.com
       - key: USER_NAME
         sync: false
       - key: USER_PASS
@@ -33,7 +33,7 @@ services:
         value: "false"
 
   - type: web
-    name: flowbot-frontend
+    name: flowbot
     runtime: static
     rootDir: frontend
     buildCommand: npm ci && npm run build

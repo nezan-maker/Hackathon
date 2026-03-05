@@ -37,6 +37,7 @@ interface CreateIntentResponse {
   message?: string;
   alreadyPurchased?: boolean;
   payment_provider?: string;
+  card_required?: boolean;
   payment_intent_id?: string;
   client_secret?: string;
   publishable_key?: string;
@@ -198,6 +199,7 @@ export function PurchasePump() {
   const stripeEnabledForCheckout = Boolean(
     intent?.client_secret && intent?.publishable_key,
   );
+  const fallbackCardRequired = intent?.card_required !== false;
 
   useEffect(() => {
     const createIntent = async () => {
@@ -216,11 +218,7 @@ export function PurchasePump() {
           return;
         }
 
-        if (response.client_secret && response.publishable_key) {
-          setIntent(response);
-        } else {
-          setIntent(null);
-        }
+        setIntent(response);
       } catch (err) {
         setIntent(null);
         setIntentError(
@@ -311,9 +309,11 @@ export function PurchasePump() {
     return null;
   };
 
-  const validateFallbackForm = () => {
+  const validateFallbackForm = (cardRequired: boolean) => {
     const commonError = validateCommonBilling();
     if (commonError) return commonError;
+
+    if (!cardRequired) return null;
 
     if (!form.cardNumber || !form.expiryMonth || !form.expiryYear || !form.cvv) {
       return 'All card fields are required';
@@ -401,9 +401,17 @@ export function PurchasePump() {
   };
 
   const submitFallback = async () => {
-    const validationError = validateFallbackForm();
+    const validationError = validateFallbackForm(fallbackCardRequired);
     if (validationError) {
       setError(validationError);
+      return;
+    }
+
+    if (!fallbackCardRequired) {
+      await completePurchase({
+        cardholderName: form.cardholderName.trim(),
+        billingZip: form.billingZip.trim(),
+      });
       return;
     }
 
@@ -609,62 +617,70 @@ export function PurchasePump() {
                     </div>
                   ) : (
                     <>
-                      <div>
-                        <label htmlFor="cardNumber" className="mb-2 block text-sm font-semibold text-slate-900">
-                          Card Number
-                        </label>
-                        <input
-                          id="cardNumber"
-                          autoComplete="cc-number"
-                          value={form.cardNumber}
-                          onChange={(e) => handleChange('cardNumber', e.target.value)}
-                          placeholder="4242 4242 4242 4242"
-                          className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                        />
-                      </div>
+                      {fallbackCardRequired ? (
+                        <>
+                          <div>
+                            <label htmlFor="cardNumber" className="mb-2 block text-sm font-semibold text-slate-900">
+                              Card Number
+                            </label>
+                            <input
+                              id="cardNumber"
+                              autoComplete="cc-number"
+                              value={form.cardNumber}
+                              onChange={(e) => handleChange('cardNumber', e.target.value)}
+                              placeholder="4242 4242 4242 4242"
+                              className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                            />
+                          </div>
 
-                      <div className="grid gap-4 sm:grid-cols-3">
-                        <div>
-                          <label htmlFor="expiryMonth" className="mb-2 block text-sm font-semibold text-slate-900">
-                            Expiry Month
-                          </label>
-                          <input
-                            id="expiryMonth"
-                            inputMode="numeric"
-                            value={form.expiryMonth}
-                            onChange={(e) => handleChange('expiryMonth', e.target.value.replace(/\D/g, '').slice(0, 2))}
-                            placeholder="MM"
-                            className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                          />
+                          <div className="grid gap-4 sm:grid-cols-3">
+                            <div>
+                              <label htmlFor="expiryMonth" className="mb-2 block text-sm font-semibold text-slate-900">
+                                Expiry Month
+                              </label>
+                              <input
+                                id="expiryMonth"
+                                inputMode="numeric"
+                                value={form.expiryMonth}
+                                onChange={(e) => handleChange('expiryMonth', e.target.value.replace(/\D/g, '').slice(0, 2))}
+                                placeholder="MM"
+                                className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="expiryYear" className="mb-2 block text-sm font-semibold text-slate-900">
+                                Expiry Year
+                              </label>
+                              <input
+                                id="expiryYear"
+                                inputMode="numeric"
+                                value={form.expiryYear}
+                                onChange={(e) => handleChange('expiryYear', e.target.value.replace(/\D/g, '').slice(0, 4))}
+                                placeholder="YYYY"
+                                className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="cvv" className="mb-2 block text-sm font-semibold text-slate-900">
+                                CVV
+                              </label>
+                              <input
+                                id="cvv"
+                                inputMode="numeric"
+                                autoComplete="cc-csc"
+                                value={form.cvv}
+                                onChange={(e) => handleChange('cvv', e.target.value.replace(/\D/g, '').slice(0, 4))}
+                                placeholder="123"
+                                className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                              />
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-blue-800">
+                          Card details are temporarily optional while payment provider setup is pending.
                         </div>
-                        <div>
-                          <label htmlFor="expiryYear" className="mb-2 block text-sm font-semibold text-slate-900">
-                            Expiry Year
-                          </label>
-                          <input
-                            id="expiryYear"
-                            inputMode="numeric"
-                            value={form.expiryYear}
-                            onChange={(e) => handleChange('expiryYear', e.target.value.replace(/\D/g, '').slice(0, 4))}
-                            placeholder="YYYY"
-                            className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                          />
-                        </div>
-                        <div>
-                          <label htmlFor="cvv" className="mb-2 block text-sm font-semibold text-slate-900">
-                            CVV
-                          </label>
-                          <input
-                            id="cvv"
-                            inputMode="numeric"
-                            autoComplete="cc-csc"
-                            value={form.cvv}
-                            onChange={(e) => handleChange('cvv', e.target.value.replace(/\D/g, '').slice(0, 4))}
-                            placeholder="123"
-                            className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                          />
-                        </div>
-                      </div>
+                      )}
                     </>
                   )}
 

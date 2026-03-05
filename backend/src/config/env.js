@@ -65,6 +65,7 @@ export const env = {
   geoIpTimeoutMs: toNumber(process.env.GEO_IP_TIMEOUT_MS, 2500),
   stripeSecretKey: process.env.STRIPE_SECRET_KEY || "",
   stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY || "",
+  allowCardlessPurchases: toBoolean(process.env.ALLOW_CARDLESS_PURCHASES),
   adminEmails: parseEmailList(process.env.ADMIN_EMAILS || ""),
   enableMqtt: toBoolean(process.env.ENABLE_MQTT),
   mqttBrokerUrl: toTrimmedString(process.env.MQTT_BROKER_URL),

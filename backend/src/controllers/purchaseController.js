@@ -313,6 +313,21 @@ const validatePurchasePayload = (payload) => {
   return null;
 };
 
+const hasCardInput = (payload) => {
+  const {
+    cardNumber,
+    cardholderName,
+    expiryMonth,
+    expiryYear,
+    cvv,
+    billingZip,
+  } = payload || {};
+
+  return Boolean(
+    cardNumber || cardholderName || expiryMonth || expiryYear || cvv || billingZip,
+  );
+};
+
 const getIntentChargeCardDetails = (intent) => {
   const charge = intent?.latest_charge;
   const card = charge?.payment_method_details?.card;
@@ -637,14 +652,23 @@ export const purchasePump = async (req, res) => {
       amountUsd = Number(receivedUsd.toFixed(2));
       paymentProvider = "stripe";
     } else {
-      const validationError = validatePurchasePayload(req.body);
-      if (validationError) {
-        return res.status(400).json({ message: validationError });
+      const cardProvided = hasCardInput(req.body);
+
+      if (cardProvided) {
+        const validationError = validatePurchasePayload(req.body);
+        if (validationError) {
+          return res.status(400).json({ message: validationError });
+        }
+      } else if (!env.allowCardlessPurchases) {
+        return res.status(503).json({
+          message: "Payment provider is not configured yet. Try again later.",
+        });
       }
 
       transactionId = `tx_${crypto.randomUUID()}`;
-      cardLast4 = maskCardNumber(req.body.cardNumber);
-      cardBrand = detectCardBrand(req.body.cardNumber);
+      cardLast4 = cardProvided ? maskCardNumber(req.body.cardNumber) : null;
+      cardBrand = cardProvided ? detectCardBrand(req.body.cardNumber) : null;
+      paymentProvider = cardProvided ? "simulated" : "simulated-cardless";
     }
 
     const installationConfirmationToken = crypto.randomBytes(32).toString("hex");
