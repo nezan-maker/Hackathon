@@ -1,0 +1,27 @@
+{
+  "name": "hackathon",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start":"concurrently \"node ./backend/src/server.js\" \"npm --prefix frontend run dev\"",
+    "install-all": "npm install && npm --prefix frontend install && npm --prefix backend install"
+
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nezan-maker/Hackathon.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/nezan-maker/Hackathon/issues"
+  },
+  "homepage": "https://github.com/nezan-maker/Hackathon#readme",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
