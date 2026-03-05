@@ -3,11 +3,16 @@ const resolveDefaultApiUrl = (): string => {
     return 'http://localhost:5500';
   }
 
-  const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
-  return `${protocol}://${window.location.hostname}:5500`;
+  const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+  if (isLocalHost) {
+    const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
+    return `${protocol}://${window.location.hostname}:5500`;
+  }
+
+  return window.location.origin;
 };
 
-const API_URL = (import.meta as any).env?.VITE_API_URL ?? resolveDefaultApiUrl();
+const API_URL = ((import.meta as any).env?.VITE_API_URL ?? resolveDefaultApiUrl()).replace(/\/+$/, '');
 
 interface ApiError {
   message?: string;

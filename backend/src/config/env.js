@@ -22,6 +22,7 @@ const parseOrigins = (value) =>
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
+const unique = (values) => [...new Set(values.filter(Boolean))];
 
 const parseSecretList = (value) =>
   (value || "")
@@ -52,11 +53,14 @@ export const env = {
   smtpPass: process.env.USER_PASS || "",
   frontendAppUrl: toTrimmedString(process.env.FRONTEND_APP_URL),
   backendAppUrl: toTrimmedString(process.env.BACKEND_APP_URL),
-  trustProxy: process.env.TRUST_PROXY || "loopback",
-  corsOrigins: parseOrigins(
-    process.env.CORS_ORIGINS ||
-      "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5500,http://127.0.0.1:5500",
-  ),
+  trustProxy: process.env.TRUST_PROXY || (isProduction ? "1" : "loopback"),
+  corsOrigins: unique([
+    ...parseOrigins(
+      process.env.CORS_ORIGINS ||
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5500,http://127.0.0.1:5500",
+    ),
+    toTrimmedString(process.env.FRONTEND_APP_URL),
+  ]),
   geoIpBaseUrl: process.env.GEO_IP_BASE_URL || "https://ipwho.is",
   geoIpTimeoutMs: toNumber(process.env.GEO_IP_TIMEOUT_MS, 2500),
   stripeSecretKey: process.env.STRIPE_SECRET_KEY || "",
