@@ -316,15 +316,13 @@ const validatePurchasePayload = (payload) => {
 const hasCardInput = (payload) => {
   const {
     cardNumber,
-    cardholderName,
     expiryMonth,
     expiryYear,
     cvv,
-    billingZip,
   } = payload || {};
 
   return Boolean(
-    cardNumber || cardholderName || expiryMonth || expiryYear || cvv || billingZip,
+    cardNumber || expiryMonth || expiryYear || cvv,
   );
 };
 

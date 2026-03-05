@@ -31,6 +31,8 @@ services:
         sync: false
       - key: ENABLE_MQTT
         value: "false"
+      - key: ALLOW_CARDLESS_PURCHASES
+        value: "true"
 
   - type: web
     name: flowbot
