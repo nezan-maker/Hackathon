@@ -16,6 +16,8 @@ interface BackendPump {
   userId?: string | null;
   purchasedAt?: string | null;
   registeredAt?: string | null;
+  installationConfirmedAt?: string | null;
+  adminInstallationConfirmedAt?: string | null;
   price_usd?: number;
 }
 
@@ -26,6 +28,9 @@ interface PurchaseResponse {
   amount_usd?: number;
   card_last4?: string;
   payment_provider?: string;
+  registration_link?: string;
+  installation_confirmation_link?: string;
+  installation_confirmation_expires_at?: string;
 }
 
 interface CreateIntentResponse {
@@ -101,7 +106,13 @@ const initialForm: PurchaseForm = {
   cvv: '',
 };
 
-type OwnershipState = 'available' | 'purchased-mine' | 'purchased-other';
+type OwnershipState =
+  | 'available'
+  | 'purchased-mine-awaiting-installation'
+  | 'purchased-mine-awaiting-admin'
+  | 'purchased-mine-ready-register'
+  | 'registered-mine'
+  | 'purchased-other';
 
 const calculatePriceFallback = (capacity: number) => {
   const base = 199;
@@ -162,9 +173,22 @@ export function PurchasePump() {
 
   const ownership = useMemo<OwnershipState>(() => {
     if (!pump?.userId) return 'available';
-    if (user?.id && String(pump.userId) === String(user.id)) return 'purchased-mine';
+    if (user?.id && String(pump.userId) === String(user.id)) {
+      if (pump.registeredAt) return 'registered-mine';
+      if (pump.installationConfirmedAt && pump.adminInstallationConfirmedAt) {
+        return 'purchased-mine-ready-register';
+      }
+      if (pump.installationConfirmedAt) return 'purchased-mine-awaiting-admin';
+      return 'purchased-mine-awaiting-installation';
+    }
     return 'purchased-other';
-  }, [pump?.userId, user?.id]);
+  }, [
+    pump?.adminInstallationConfirmedAt,
+    pump?.installationConfirmedAt,
+    pump?.registeredAt,
+    pump?.userId,
+    user?.id,
+  ]);
 
   const price = useMemo(() => {
     if (!pump) return 0;
@@ -323,6 +347,18 @@ export function PurchasePump() {
     });
     setSuccess(response);
     setForm(initialForm);
+    setIntent(null);
+    setPump((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        userId: user?.id ?? current.userId ?? null,
+        purchasedAt: current.purchasedAt ?? new Date().toISOString(),
+        installationConfirmedAt: null,
+        adminInstallationConfirmedAt: null,
+        registeredAt: null,
+      };
+    });
   };
 
   const submitWithStripe = async () => {
@@ -441,12 +477,60 @@ export function PurchasePump() {
                 </div>
               )}
 
-              {ownership === 'purchased-mine' && (
-                <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-800">
-                  <p>You already purchased this pump.</p>
+              {ownership === 'purchased-mine-awaiting-installation' && (
+                <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">
+                  <p className="font-semibold">You already purchased this pump.</p>
+                  <p className="text-sm">
+                    Complete installation using the confirmation link sent to your email. After that, admin approval is required before registration.
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     <Link
                       to="/register-pump"
+                      className="rounded-lg border border-amber-300 px-4 py-2 text-sm font-medium hover:bg-amber-100"
+                    >
+                      Open Registration
+                    </Link>
+                    <Link
+                      to="/pumps"
+                      className="rounded-lg border border-amber-300 px-4 py-2 text-sm font-medium hover:bg-amber-100"
+                    >
+                      Back to Marketplace
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {ownership === 'purchased-mine-awaiting-admin' && (
+                <div className="space-y-3 rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-indigo-900">
+                  <p className="font-semibold">Installation confirmed by you.</p>
+                  <p className="text-sm">
+                    Waiting for admin confirmation. Registration will be enabled once admin approves installation.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      to="/register-pump"
+                      className="rounded-lg border border-indigo-300 px-4 py-2 text-sm font-medium hover:bg-indigo-100"
+                    >
+                      Open Registration
+                    </Link>
+                    <Link
+                      to="/pumps"
+                      className="rounded-lg border border-indigo-300 px-4 py-2 text-sm font-medium hover:bg-indigo-100"
+                    >
+                      Back to Marketplace
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {ownership === 'purchased-mine-ready-register' && (
+                <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-800">
+                  <p className="font-semibold">
+                    Installation is fully approved. You can register this pump now.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      to={`/register-pump?serial_id=${encodeURIComponent(pump.serial_id)}`}
                       className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800"
                     >
                       Register Pump
@@ -456,6 +540,26 @@ export function PurchasePump() {
                       className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-medium hover:bg-blue-100"
                     >
                       Back to Marketplace
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {ownership === 'registered-mine' && (
+                <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
+                  <p className="font-semibold">This pump is already registered.</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      to={`/pumps/${pump._id}`}
+                      className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800"
+                    >
+                      View Pump
+                    </Link>
+                    <Link
+                      to="/control"
+                      className="rounded-lg border border-emerald-300 px-4 py-2 text-sm font-medium hover:bg-emerald-100"
+                    >
+                      Open Remote Control
                     </Link>
                   </div>
                 </div>
@@ -594,14 +698,29 @@ export function PurchasePump() {
                     {typeof success.amount_usd === 'number' && <p>Amount: ${success.amount_usd.toFixed(2)}</p>}
                     {success.card_last4 && <p>Card: •••• {success.card_last4}</p>}
                     {success.payment_provider && <p>Provider: {success.payment_provider}</p>}
+                    {success.installation_confirmation_expires_at && (
+                      <p>
+                        Installation link expires:{' '}
+                        {new Date(success.installation_confirmation_expires_at).toLocaleString()}
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Link
-                      to="/register-pump"
-                      className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
-                    >
-                      Register Pump
-                    </Link>
+                    {success.installation_confirmation_link ? (
+                      <a
+                        href={success.installation_confirmation_link}
+                        className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+                      >
+                        Confirm Installation
+                      </a>
+                    ) : (
+                      <Link
+                        to="/register-pump"
+                        className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+                      >
+                        Open Registration
+                      </Link>
+                    )}
                     <Link
                       to="/pumps"
                       className="rounded-lg border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-100"
@@ -637,7 +756,7 @@ export function PurchasePump() {
               </p>
               <p className="flex items-center gap-2">
                 <AlertCircle className="h-4 w-4" />
-                You must purchase and register a pump before remote control is enabled.
+                You must purchase, confirm installation, get admin approval, and register before remote control is enabled.
               </p>
             </div>
           </aside>

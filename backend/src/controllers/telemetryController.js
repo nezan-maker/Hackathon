@@ -1,7 +1,11 @@
 import createDebug from "debug";
 import Pump from "../models/Pump.js";
 import { Alert, F_Sensor, P_Sensor, S_Sensor, T_Sensor } from "../models/Sensor.js";
-import { isAdminUser, isPumpOwnedByUser } from "../utils/accessControl.js";
+import {
+  filterPumpsOwnedByUser,
+  isAdminUser,
+  isPumpOwnedByUser,
+} from "../utils/accessControl.js";
 
 const debug = createDebug("app:telemetry");
 
@@ -59,19 +63,22 @@ export const telemetryOverview = async (req, res) => {
 
     const limit = clampLimit(req.query.limit, 80);
     const isAdmin = isAdminUser(user);
-    const pumpFilter = isAdmin
-      ? {}
-      : { userId: String(user._id), purchasedAt: { $ne: null } };
-    const pumps = await Pump.find(pumpFilter, {
-      _id: 1,
-      name: 1,
-      serial_id: 1,
-      userId: 1,
-      purchasedAt: 1,
-      registeredAt: 1,
-    })
+    const pumpCandidates = await Pump.find(
+      isAdmin ? {} : { userId: { $exists: true, $ne: null } },
+      {
+        _id: 1,
+        name: 1,
+        serial_id: 1,
+        userId: 1,
+        purchasedAt: 1,
+        registeredAt: 1,
+      },
+    )
       .sort({ createdAt: -1 })
       .lean();
+    const pumps = isAdmin
+      ? pumpCandidates
+      : filterPumpsOwnedByUser(pumpCandidates, user);
 
     const allowedPumpIds = pumps.map((pump) => String(pump.serial_id));
     const sensorFilter =

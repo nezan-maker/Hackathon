@@ -2,6 +2,7 @@ import express from "express"
 import {
     purchasePump,
     registerPump,
+    confirmPumpInstallation,
     advertPump,
     myPurchasedPumps,
     publicCatalogPumps,
@@ -18,6 +19,7 @@ import { authMiddleware } from "../controllers/userController.js"
 const createPurchaseRoutes = () => {
     const router = express.Router()
     router.get("/home", advertPump)
+    router.get("/installations/confirm", confirmPumpInstallation)
     router.get("/my-pumps", authMiddleware, myPurchasedPumps)
     router.get("/catalog", publicCatalogPumps)
     router.get("/alerts", authMiddleware, getAlerts)

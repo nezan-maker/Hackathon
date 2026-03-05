@@ -125,6 +125,8 @@ export const adminOverview = async (_req, res) => {
           imageProvider: pump.imageProvider || "external",
           userId: pump.userId || null,
           purchasedAt: pump.purchasedAt || null,
+          installationConfirmedAt: pump.installationConfirmedAt || null,
+          adminInstallationConfirmedAt: pump.adminInstallationConfirmedAt || null,
           registeredAt: pump.registeredAt || null,
           price_usd: calculatePumpPrice(pump.capacity),
           createdAt: pump.createdAt,
@@ -191,6 +193,8 @@ export const adminListPumps = async (_req, res) => {
             }
           : null,
         purchasedAt: pump.purchasedAt || null,
+        installationConfirmedAt: pump.installationConfirmedAt || null,
+        adminInstallationConfirmedAt: pump.adminInstallationConfirmedAt || null,
         registeredAt: pump.registeredAt || null,
         price_usd: calculatePumpPrice(pump.capacity),
         createdAt: pump.createdAt,
@@ -269,5 +273,52 @@ export const adminCreatePump = async (req, res) => {
   } catch (error) {
     debug("adminCreatePump failed", error);
     return res.status(500).json({ message: "Unable to create pump" });
+  }
+};
+
+export const adminConfirmPumpInstallation = async (req, res) => {
+  try {
+    const serialId = String(req.params.serial_id || "").trim();
+    if (!serialId) {
+      return res.status(400).json({ message: "serial_id is required" });
+    }
+
+    const pump = await Pump.findOne({ serial_id: serialId });
+    if (!pump) {
+      return res.status(404).json({ message: "Pump not found" });
+    }
+
+    if (!pump.purchasedAt) {
+      return res.status(400).json({
+        message: "Pump must be purchased before installation can be confirmed",
+      });
+    }
+
+    if (!pump.installationConfirmedAt) {
+      return res.status(409).json({
+        message:
+          "User has not confirmed installation yet. Wait for user confirmation first.",
+      });
+    }
+
+    if (pump.adminInstallationConfirmedAt) {
+      return res.status(200).json({
+        message: "Installation is already confirmed by admin",
+        serial_id: pump.serial_id,
+        adminInstallationConfirmedAt: pump.adminInstallationConfirmedAt,
+      });
+    }
+
+    pump.adminInstallationConfirmedAt = new Date();
+    await pump.save();
+
+    return res.status(200).json({
+      message: "Installation confirmed by admin. User can now register this pump.",
+      serial_id: pump.serial_id,
+      adminInstallationConfirmedAt: pump.adminInstallationConfirmedAt,
+    });
+  } catch (error) {
+    debug("adminConfirmPumpInstallation failed", error);
+    return res.status(500).json({ message: "Unable to confirm installation" });
   }
 };

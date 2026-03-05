@@ -51,6 +51,7 @@ export const env = {
   smtpUser: process.env.USER_NAME || "",
   smtpPass: process.env.USER_PASS || "",
   frontendAppUrl: toTrimmedString(process.env.FRONTEND_APP_URL),
+  backendAppUrl: toTrimmedString(process.env.BACKEND_APP_URL),
   trustProxy: process.env.TRUST_PROXY || "loopback",
   corsOrigins: parseOrigins(
     process.env.CORS_ORIGINS ||

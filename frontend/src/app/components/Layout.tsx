@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import { FlowBotLogo } from "./FlowBotLogo";
 
 export function Layout() {
   const { user, logout } = useAuth();
@@ -28,7 +29,7 @@ export function Layout() {
     navigate("/login");
   };
 
-  const navigation = [
+  const userNavigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { name: "Pumps", href: "/pumps", icon: Droplets },
     {
@@ -41,17 +42,28 @@ export function Layout() {
       href: "/control",
       icon: SlidersHorizontal,
     },
-    ...(user?.role === "admin"
-      ? [{ name: "Admin", href: "/admin", icon: ShieldCheck }]
-      : []),
     { name: "Alerts", href: "/alerts", icon: AlertTriangle },
     { name: "Settings", href: "/settings", icon: Settings },
   ];
 
+  const adminNavigation = [
+    { name: "Admin", href: "/admin", icon: ShieldCheck },
+    { name: "Pumps", href: "/pumps", icon: Droplets },
+    {
+      name: "Control",
+      href: "/control",
+      icon: SlidersHorizontal,
+    },
+    { name: "Alerts", href: "/alerts", icon: AlertTriangle },
+    { name: "Settings", href: "/settings", icon: Settings },
+  ];
+
+  const navigation = user?.role === "admin" ? adminNavigation : userNavigation;
+
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen overflow-x-hidden bg-slate-50">
       {/* Sidebar - Desktop */}
       <div className="hidden md:fixed md:inset-y-0 md:flex md:w-64 md:flex-col">
         <div
@@ -62,15 +74,11 @@ export function Layout() {
           }`}
         >
           <div className="flex flex-1 flex-col overflow-y-auto pt-5 pb-4">
-            <div className="flex flex-shrink-0 items-center px-4 mb-8">
-              <div className="flex items-center justify-center w-10 h-10 bg-blue-600 rounded-lg">
-                <Droplets className="h-6 w-6 text-white" />
-              </div>
-              <span
-                className={`ml-3 text-xl font-semibold ${isDarkTheme ? "text-white" : "text-slate-900"}`}
-              >
-                FlowBot
-              </span>
+            <div className="mb-8 flex flex-shrink-0 items-center px-4">
+              <FlowBotLogo
+                size="md"
+                textClassName={isDarkTheme ? "text-white" : "text-slate-900"}
+              />
             </div>
             <nav className="mt-2 flex-1 space-y-1 px-3">
               {navigation.map((item) => {
@@ -137,16 +145,10 @@ export function Layout() {
         }`}
       >
         <div className="flex items-center justify-between p-4">
-          <div className="flex items-center">
-            <div className="flex items-center justify-center w-8 h-8 bg-blue-600 rounded-lg">
-              <Droplets className="h-5 w-5 text-white" />
-            </div>
-            <span
-              className={`ml-2 text-lg font-semibold ${isDarkTheme ? "text-white" : "text-slate-900"}`}
-            >
-              FlowBot
-            </span>
-          </div>
+          <FlowBotLogo
+            size="sm"
+            textClassName={isDarkTheme ? "text-white" : "text-slate-900"}
+          />
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className={`p-2 rounded-lg transition-all ${
@@ -166,11 +168,11 @@ export function Layout() {
         {/* Mobile menu */}
         {mobileMenuOpen && (
           <div
-            className={
+            className={`max-h-[calc(100vh-4rem)] overflow-y-auto ${
               isDarkTheme
                 ? "bg-slate-900 border-t border-slate-700"
                 : "bg-white border-t border-slate-200"
-            }
+            }`}
           >
             <nav className="px-3 py-4 space-y-1">
               {navigation.map((item) => {
@@ -229,8 +231,8 @@ export function Layout() {
       </div>
 
       {/* Main content */}
-      <div className="md:pl-64 flex flex-col flex-1">
-        <main className="flex-1 pt-16 md:pt-0">
+      <div className="md:pl-64 flex min-w-0 flex-1 flex-col">
+        <main className="min-w-0 flex-1 overflow-x-hidden pt-16 md:pt-0">
           <Outlet />
         </main>
       </div>

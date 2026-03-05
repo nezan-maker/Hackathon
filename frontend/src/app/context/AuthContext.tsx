@@ -146,13 +146,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const restoreSession = async () => {
       const storedUser = localStorage.getItem("user");
-      if (!storedUser) {
-        setAuthInitializing(false);
-        return;
+      if (storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser) as User;
+          setUser(parsedUser);
+        } catch {
+          localStorage.removeItem("user");
+        }
       }
-
-      const parsedUser = JSON.parse(storedUser) as User;
-      setUser(parsedUser);
 
       try {
         await apiFetch("/auth/refresh", { method: "POST" });
@@ -172,9 +173,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
+    const normalizedEmail = String(email).toLowerCase().trim();
     await apiFetch("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: normalizedEmail, password }),
     });
 
     const authenticatedUser = await fetchCurrentUser();

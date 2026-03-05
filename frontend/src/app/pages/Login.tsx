@@ -2,16 +2,18 @@ import React from "react";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { useAuth } from "../context/AuthContext";
-import { Droplets, Mail, Lock, AlertCircle } from "lucide-react";
+import { Mail, Lock, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { PublicThemeToggle } from "../components/PublicThemeToggle";
 import { PumpLoadingIndicator } from "../components/PumpLoadingIndicator";
+import { FlowBotLogo } from "../components/FlowBotLogo";
 
 export function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, isAuthenticated, authInitializing } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const redirectParam =
@@ -24,19 +26,29 @@ export function Login() {
     ? `/register?redirect=${encodeURIComponent(redirectParam)}`
     : "/register";
 
+  React.useEffect(() => {
+    if (authInitializing || !isAuthenticated) {
+      return;
+    }
+
+    navigate(redirectAfterLogin, { replace: true });
+  }, [authInitializing, isAuthenticated, navigate, redirectAfterLogin]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setError("");
 
-    if (!email || !password) {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail || !password) {
       setError("Please fill in all fields");
       return;
     }
 
     setLoading(true);
     try {
-      await login(email, password);
-      navigate(redirectAfterLogin);
+      await login(normalizedEmail, password);
+      navigate(redirectAfterLogin, { replace: true });
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Invalid email or password",
@@ -54,9 +66,7 @@ export function Login() {
 
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-xl shadow-blue-600/30">
-            <Droplets className="h-8 w-8 text-white" />
-          </div>
+          <FlowBotLogo className="mb-4" size="lg" showText={false} />
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Welcome Back</h1>
           <p className="text-slate-600 dark:text-slate-300">Sign in to your FlowBot account</p>
         </div>
@@ -86,6 +96,8 @@ export function Login() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  required
                   className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-3 pl-10 text-slate-900 placeholder-slate-400 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-white/20 dark:bg-white/10 dark:text-white dark:placeholder-slate-400"
                   placeholder="you@example.com"
                 />
@@ -105,12 +117,22 @@ export function Login() {
                 </div>
                 <input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-3 pl-10 text-slate-900 placeholder-slate-400 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-white/20 dark:bg-white/10 dark:text-white dark:placeholder-slate-400"
+                  autoComplete="current-password"
+                  required
+                  className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-3 pl-10 pr-11 text-slate-900 placeholder-slate-400 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-white/20 dark:bg-white/10 dark:text-white dark:placeholder-slate-400"
                   placeholder="Enter your password"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((current) => !current)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 transition-colors hover:text-slate-600 dark:text-slate-300 dark:hover:text-white"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
               </div>
             </div>
 

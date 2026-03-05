@@ -83,5 +83,35 @@ const userSchema = new mongoose.Schema(
   },
 );
 
+const deriveFallbackName = (emailValue) => {
+  const email = String(emailValue || "").toLowerCase().trim();
+  const localPart = email.split("@")[0] || "";
+  const cleaned = localPart
+    .replace(/[^a-z0-9._-]/gi, " ")
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) {
+    return "FlowBot User";
+  }
+
+  return cleaned
+    .split(" ")
+    .map((word) =>
+      word ? `${word.charAt(0).toUpperCase()}${word.slice(1)}` : "",
+    )
+    .join(" ")
+    .trim();
+};
+
+// Backfill legacy records that were created before `name` became mandatory.
+userSchema.pre("validate", function setMissingName() {
+  const normalizedName = String(this.name || "").trim();
+  if (!normalizedName) {
+    this.name = deriveFallbackName(this.email);
+  }
+});
+
 const User = mongoose.model("User", userSchema);
 export default User;

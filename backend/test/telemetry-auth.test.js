@@ -28,7 +28,7 @@ const createQuery = (result) => ({
   lean: async () => result,
 });
 
-test("telemetryOverview limits non-admin users to purchased pumps", async () => {
+test("telemetryOverview limits non-admin users to pumps owned by userId", async () => {
   const originalPumpFind = Pump.find;
   const originalPFind = P_Sensor.find;
   const originalFFind = F_Sensor.find;
@@ -76,8 +76,7 @@ test("telemetryOverview limits non-admin users to purchased pumps", async () => 
 
     assert.equal(res.statusCode, 200);
     assert.deepEqual(capturedPumpFilter, {
-      userId: "user-1",
-      purchasedAt: { $ne: null },
+      userId: { $exists: true, $ne: null },
     });
     assert.deepEqual(capturedSensorFilter, {
       pump_id: { $in: ["111111"] },
@@ -177,4 +176,3 @@ test("pumpTelemetry allows admin to access all pumps", async () => {
     S_Sensor.find = originalSFind;
   }
 });
-

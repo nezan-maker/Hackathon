@@ -1,25 +1,49 @@
 import net from "node:net";
 
 const normalizeIp = (ip) => {
-  if (!ip) return "";
-  if (ip.startsWith("::ffff:")) return ip.slice(7);
-  if (ip === "::1") return "127.0.0.1";
-  return ip;
+  const value = String(ip || "").trim().replace(/^"(.*)"$/, "$1");
+  if (!value) return "";
+  if (value.startsWith("::ffff:")) return value.slice(7);
+  if (value === "::1") return "127.0.0.1";
+  return value;
+};
+
+const readHeaderValue = (headers, name) => {
+  const raw = headers?.[name];
+  if (Array.isArray(raw)) {
+    return raw.join(",");
+  }
+  return typeof raw === "string" ? raw : "";
+};
+
+const parseForwardedList = (value) =>
+  String(value || "")
+    .split(",")
+    .map((entry) => normalizeIp(entry))
+    .filter((entry) => entry && entry.toLowerCase() !== "unknown");
+
+const pickPreferredIp = (candidates) => {
+  if (!Array.isArray(candidates) || candidates.length === 0) return "";
+  const firstPublic = candidates.find((candidate) => isPublicRoutableIp(candidate));
+  return firstPublic || candidates[0] || "";
 };
 
 export const getClientIp = (req) => {
-  const forwarded = req.headers["x-forwarded-for"];
-
-  if (typeof forwarded === "string" && forwarded.length > 0) {
-    const firstIp = forwarded.split(",")[0]?.trim();
-    return normalizeIp(firstIp);
+  const forwardedFor = readHeaderValue(req?.headers, "x-forwarded-for");
+  const forwardedCandidates = parseForwardedList(forwardedFor);
+  if (forwardedCandidates.length > 0) {
+    return pickPreferredIp(forwardedCandidates);
   }
 
-  if (Array.isArray(forwarded) && forwarded.length > 0) {
-    return normalizeIp(forwarded[0]);
+  const realIp = normalizeIp(readHeaderValue(req?.headers, "x-real-ip"));
+  if (realIp) {
+    return realIp;
   }
 
-  return normalizeIp(req.ip || req.socket?.remoteAddress || "");
+  const remoteCandidates = [normalizeIp(req?.ip), normalizeIp(req?.socket?.remoteAddress)].filter(
+    Boolean,
+  );
+  return pickPreferredIp(remoteCandidates);
 };
 
 const isPrivateV4 = (ip) =>

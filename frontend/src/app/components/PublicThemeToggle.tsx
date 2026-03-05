@@ -12,7 +12,7 @@ export function PublicThemeToggle({ className = "" }: PublicThemeToggleProps) {
 
   return (
     <div
-      className={`relative inline-grid w-44 grid-cols-2 rounded-full border p-1 shadow-lg backdrop-blur transition-colors ${
+      className={`relative inline-grid w-36 grid-cols-2 rounded-full border p-1 shadow-lg backdrop-blur transition-colors sm:w-44 ${
         isDark
           ? "border-slate-600/70 bg-slate-900/75 shadow-slate-950/35"
           : "border-slate-200 bg-white/90 shadow-slate-300/40"
@@ -30,7 +30,7 @@ export function PublicThemeToggle({ className = "" }: PublicThemeToggleProps) {
         type="button"
         onClick={() => setTheme("light")}
         aria-label="Switch to light mode"
-        className={`relative z-10 inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+        className={`relative z-10 inline-flex items-center justify-center gap-1 rounded-full px-2 py-1.5 text-[11px] font-semibold transition-colors sm:gap-1.5 sm:px-3 sm:text-xs ${
           isDark ? "text-slate-300 hover:text-white" : "text-slate-800"
         }`}
       >
@@ -42,7 +42,7 @@ export function PublicThemeToggle({ className = "" }: PublicThemeToggleProps) {
         type="button"
         onClick={() => setTheme("dark")}
         aria-label="Switch to dark mode"
-        className={`relative z-10 inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+        className={`relative z-10 inline-flex items-center justify-center gap-1 rounded-full px-2 py-1.5 text-[11px] font-semibold transition-colors sm:gap-1.5 sm:px-3 sm:text-xs ${
           isDark ? "text-white" : "text-slate-700 hover:text-slate-900"
         }`}
       >

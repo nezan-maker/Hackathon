@@ -54,6 +54,8 @@ interface TelemetrySeriesPoint {
   timestamp: string;
 }
 
+type TelemetryMetric = 'pressure' | 'flow' | 'temperature' | 'speed';
+
 interface PumpSeriesSnapshot {
   pressure: TelemetrySeriesPoint[];
   flow: TelemetrySeriesPoint[];
@@ -80,6 +82,59 @@ const emptyPumpSeries: PumpSeriesSnapshot = {
   flow: [],
   temperature: [],
   speed: [],
+};
+
+const maxRealtimePointsPerMetric = 120;
+
+const resolveMetric = (
+  metric?: string,
+  topic?: string,
+): TelemetryMetric | null => {
+  const normalizedMetric = String(metric || '').trim().toLowerCase();
+  if (normalizedMetric === 'pressure') return 'pressure';
+  if (normalizedMetric === 'flow') return 'flow';
+  if (normalizedMetric === 'temperature' || normalizedMetric === 'temp') {
+    return 'temperature';
+  }
+  if (normalizedMetric === 'speed') return 'speed';
+
+  const normalizedTopic = String(topic || '').trim().toLowerCase();
+  if (
+    normalizedTopic.startsWith('/pump/pressure') ||
+    normalizedTopic.startsWith('pump/pressure')
+  ) {
+    return 'pressure';
+  }
+  if (
+    normalizedTopic.startsWith('/pump/flow') ||
+    normalizedTopic.startsWith('pump/flow')
+  ) {
+    return 'flow';
+  }
+  if (
+    normalizedTopic.startsWith('/pump/temp') ||
+    normalizedTopic.startsWith('pump/temp') ||
+    normalizedTopic.startsWith('/pump/temperature') ||
+    normalizedTopic.startsWith('pump/temperature')
+  ) {
+    return 'temperature';
+  }
+  if (
+    normalizedTopic.startsWith('/pump/speed') ||
+    normalizedTopic.startsWith('pump/speed')
+  ) {
+    return 'speed';
+  }
+  return null;
+};
+
+const appendRealtimePoint = (
+  series: TelemetrySeriesPoint[],
+  point: TelemetrySeriesPoint,
+) => {
+  const next = [...series, point];
+  if (next.length <= maxRealtimePointsPerMetric) return next;
+  return next.slice(next.length - maxRealtimePointsPerMetric);
 };
 
 const toTimeLabel = (timestamp: string) =>
@@ -219,13 +274,84 @@ export function Dashboard() {
 
         const handleConnect = () => setConnected(true);
         const handleDisconnect = () => setConnected(false);
+        const handleSensorUpdate = (payload: {
+          pumpId?: string;
+          metric?: string;
+          topic?: string;
+          value?: number | string;
+          timestamp?: string;
+        }) => {
+          const serialId = String(payload.pumpId || '').trim();
+          if (!serialId) return;
+
+          const metric = resolveMetric(payload.metric, payload.topic);
+          if (!metric) return;
+
+          const numericValue = Number(payload.value);
+          if (!Number.isFinite(numericValue)) return;
+
+          const isVisiblePump = pumps.some(
+            (pump) =>
+              Boolean(pump.registeredAt) &&
+              String(pump.serial_id) === serialId,
+          );
+          if (!isVisiblePump) return;
+
+          const timestamp = payload.timestamp
+            ? new Date(payload.timestamp).toISOString()
+            : new Date().toISOString();
+          const roundedValue = Number(numericValue.toFixed(2));
+
+          setLatestBySerialId((current) => {
+            const currentPumpLatest = current[serialId] || {
+              ...emptyLatestTelemetry,
+              generatedAt: timestamp,
+            };
+            return {
+              ...current,
+              [serialId]: {
+                ...currentPumpLatest,
+                [metric]: roundedValue,
+                generatedAt: timestamp,
+              },
+            };
+          });
+
+          setSeriesBySerialId((current) => {
+            const currentPumpSeries = current[serialId] || {
+              pressure: [],
+              flow: [],
+              temperature: [],
+              speed: [],
+            };
+            return {
+              ...current,
+              [serialId]: {
+                ...currentPumpSeries,
+                [metric]: appendRealtimePoint(currentPumpSeries[metric], {
+                  value: roundedValue,
+                  timestamp,
+                }),
+              },
+            };
+          });
+
+          setTelemetryErrors((current) => {
+            if (!current[serialId]) return current;
+            const next = { ...current };
+            delete next[serialId];
+            return next;
+          });
+        };
 
         socket.on('connect', handleConnect);
         socket.on('disconnect', handleDisconnect);
+        socket.on('sensor:update', handleSensorUpdate);
 
         cleanup = () => {
           socket.off('connect', handleConnect);
           socket.off('disconnect', handleDisconnect);
+          socket.off('sensor:update', handleSensorUpdate);
         };
       })
       .catch(() => {
@@ -236,7 +362,7 @@ export function Dashboard() {
       active = false;
       cleanup?.();
     };
-  }, []);
+  }, [pumps]);
 
   const registeredPumps = useMemo(
     () => pumps.filter((pump) => Boolean(pump.registeredAt)),
@@ -250,13 +376,13 @@ export function Dashboard() {
     <div className="p-4 md:p-8">
       <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="mb-2 text-3xl font-bold text-slate-900">Pump Telemetry Dashboard</h1>
+          <h1 className="mb-2 text-2xl font-bold text-slate-900 sm:text-3xl">Pump Telemetry Dashboard</h1>
           <p className="text-slate-600">
             Telemetry is now organized by pump. Open a registered pump to see its own live data.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 sm:w-auto">
             <p className="flex items-center gap-2">
               <Circle className={`h-3 w-3 ${connected ? 'fill-emerald-500 text-emerald-500' : 'fill-amber-500 text-amber-500'}`} />
               {connected ? 'Realtime Connected' : 'Realtime Disconnected'}
@@ -264,7 +390,7 @@ export function Dashboard() {
           </div>
           <Link
             to="/pumps"
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:w-auto"
           >
             Open Pumps Page
             <ChevronRight className="h-4 w-4" />

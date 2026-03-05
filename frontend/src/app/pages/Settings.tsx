@@ -9,12 +9,15 @@ import {
   Shield,
   Save,
   CheckCircle,
+  AlertCircle,
   Palette,
   Sun,
   Moon,
   Monitor,
   Globe,
   KeyRound,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme, type AppTheme } from '../context/ThemeContext';
@@ -24,6 +27,7 @@ export function Settings() {
   const { user } = useAuth();
   const { theme, resolvedTheme, setTheme } = useTheme();
   const [savedMessage, setSavedMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Profile settings
   const [name, setName] = useState(user?.name || '');
@@ -34,6 +38,9 @@ export function Settings() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [updatingPassword, setUpdatingPassword] = useState(false);
 
   // Notification settings
@@ -43,8 +50,15 @@ export function Settings() {
   const [dailyReports, setDailyReports] = useState(false);
 
   const showSavedMessage = (message: string) => {
+    setErrorMessage('');
     setSavedMessage(message);
     setTimeout(() => setSavedMessage(''), 3000);
+  };
+
+  const showErrorMessage = (message: string) => {
+    setSavedMessage('');
+    setErrorMessage(message);
+    setTimeout(() => setErrorMessage(''), 3500);
   };
 
   const handleSaveProfile = (e: React.FormEvent) => {
@@ -55,19 +69,20 @@ export function Settings() {
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavedMessage('');
+    setErrorMessage('');
 
     if (!currentPassword || !newPassword || !confirmPassword) {
-      alert('All password fields are required');
+      showErrorMessage('All password fields are required');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      alert('Passwords do not match');
+      showErrorMessage('Passwords do not match');
       return;
     }
 
     if (newPassword.length < 8) {
-      alert('New password must be at least 8 characters');
+      showErrorMessage('New password must be at least 8 characters');
       return;
     }
 
@@ -87,7 +102,7 @@ export function Settings() {
       setNewPassword('');
       setConfirmPassword('');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update password');
+      showErrorMessage(err instanceof Error ? err.message : 'Failed to update password');
     } finally {
       setUpdatingPassword(false);
     }
@@ -117,11 +132,11 @@ export function Settings() {
     <div className="p-4 md:p-8">
       <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-3xl text-gray-900 mb-2">Settings Workspace</h1>
+          <h1 className="mb-2 text-2xl text-gray-900 sm:text-3xl">Settings Workspace</h1>
           <p className="text-gray-600">Manage account modules from one dashboard grid.</p>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
-          Signed in as <span className="font-semibold">{user?.email || 'Unknown user'}</span>
+        <div className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 md:w-auto">
+          Signed in as <span className="break-all font-semibold">{user?.email || 'Unknown user'}</span>
         </div>
       </div>
 
@@ -129,6 +144,13 @@ export function Settings() {
         <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
           <CheckCircle className="h-5 w-5 text-green-600" />
           <p className="text-green-800">{savedMessage}</p>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
+          <AlertCircle className="h-5 w-5 text-red-600" />
+          <p className="text-red-800">{errorMessage}</p>
         </div>
       )}
 
@@ -251,11 +273,19 @@ export function Settings() {
                   </div>
                   <input
                     id="currentPassword"
-                    type="password"
+                    type={showCurrentPassword ? 'text' : 'password'}
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="block w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="block w-full pl-10 pr-11 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPassword((current) => !current)}
+                    className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 transition-colors hover:text-slate-600"
+                    aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showCurrentPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
                 </div>
               </div>
 
@@ -269,11 +299,19 @@ export function Settings() {
                   </div>
                   <input
                     id="newPassword"
-                    type="password"
+                    type={showNewPassword ? 'text' : 'password'}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="block w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="block w-full pl-10 pr-11 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((current) => !current)}
+                    className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 transition-colors hover:text-slate-600"
+                    aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
                 </div>
                 <p className="text-sm text-gray-500 mt-2">Minimum 8 characters</p>
               </div>
@@ -288,11 +326,19 @@ export function Settings() {
                   </div>
                   <input
                     id="confirmPassword"
-                    type="password"
+                    type={showConfirmPassword ? 'text' : 'password'}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="block w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="block w-full pl-10 pr-11 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((current) => !current)}
+                    className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 transition-colors hover:text-slate-600"
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
                 </div>
               </div>
 
@@ -389,21 +435,21 @@ export function Settings() {
               <h2 className="text-xl text-gray-900">Session Geolocation</h2>
             </div>
             <div className="grid gap-3 text-sm md:grid-cols-3">
-              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+              <div className="flex flex-col items-start gap-1 rounded-lg bg-slate-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-gray-600">Latitude</span>
                 <span className="text-gray-900">
                   {typeof user?.lat === 'number' ? user.lat.toFixed(6) : 'Not available'}
                 </span>
               </div>
-              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+              <div className="flex flex-col items-start gap-1 rounded-lg bg-slate-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-gray-600">Longitude</span>
                 <span className="text-gray-900">
                   {typeof user?.lon === 'number' ? user.lon.toFixed(6) : 'Not available'}
                 </span>
               </div>
-              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+              <div className="flex flex-col items-start gap-1 rounded-lg bg-slate-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-gray-600">Last Login IP</span>
-                <span className="text-gray-900">{user?.lastLoginIp || 'Not available'}</span>
+                <span className="break-all text-gray-900">{user?.lastLoginIp || 'Not available'}</span>
               </div>
             </div>
           </div>

@@ -2,14 +2,16 @@ import React from 'react';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../context/AuthContext';
-import { Droplets, User, Mail, Lock, Phone, AlertCircle } from 'lucide-react';
+import { User, Mail, Lock, Phone, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { PublicThemeToggle } from '../components/PublicThemeToggle';
 import { PumpLoadingIndicator } from '../components/PumpLoadingIndicator';
+import { FlowBotLogo } from '../components/FlowBotLogo';
 
 export function Register() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -58,9 +60,7 @@ export function Register() {
 
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-xl shadow-blue-600/30">
-            <Droplets className="h-8 w-8 text-white" />
-          </div>
+          <FlowBotLogo className="mb-4" size="lg" showText={false} />
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Create Account</h1>
           <p className="text-slate-600 dark:text-slate-300">Start managing your pumps today</p>
         </div>
@@ -141,12 +141,20 @@ export function Register() {
                 </div>
                 <input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-3 pl-10 text-slate-900 placeholder-slate-400 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-white/20 dark:bg-white/10 dark:text-white dark:placeholder-slate-400"
+                  className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-3 pl-10 pr-11 text-slate-900 placeholder-slate-400 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-white/20 dark:bg-white/10 dark:text-white dark:placeholder-slate-400"
                   placeholder="Minimum 8 characters"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((current) => !current)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 transition-colors hover:text-slate-600 dark:text-slate-300 dark:hover:text-white"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
               </div>
             </div>
 

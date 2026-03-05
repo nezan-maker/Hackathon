@@ -25,3 +25,9 @@ export const isPumpOwnedByUser = (pump, user) => {
   return userId === pumpUserId;
 };
 
+export const filterPumpsOwnedByUser = (pumps, user) => {
+  if (!Array.isArray(pumps) || pumps.length === 0) return [];
+  if (isAdminUser(user)) return pumps;
+
+  return pumps.filter((pump) => isPumpOwnedByUser(pump, user));
+};

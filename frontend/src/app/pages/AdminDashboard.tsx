@@ -59,6 +59,8 @@ interface AdminPump {
     email: string;
   } | null;
   purchasedAt?: string | null;
+  installationConfirmedAt?: string | null;
+  adminInstallationConfirmedAt?: string | null;
   registeredAt?: string | null;
   price_usd: number;
   createdAt: string;
@@ -109,7 +111,12 @@ interface NewPumpForm {
   serial_id: string;
 }
 
-type PumpCatalogStatus = 'available' | 'purchased' | 'registered';
+type PumpCatalogStatus =
+  | 'available'
+  | 'purchased-awaiting-user'
+  | 'purchased-awaiting-admin'
+  | 'purchased-ready-register'
+  | 'registered';
 
 const initialForm: NewPumpForm = {
   name: '',
@@ -141,6 +148,7 @@ export function AdminDashboard() {
   const [generatedAt, setGeneratedAt] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmingSerialId, setConfirmingSerialId] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [connected, setConnected] = useState(false);
@@ -265,6 +273,30 @@ export function AdminDashboard() {
     }
   };
 
+  const handleAdminInstallationConfirm = async (serialId: string) => {
+    setError('');
+    setSuccess('');
+    setConfirmingSerialId(serialId);
+
+    try {
+      const response = await apiFetch<{ message?: string }>(
+        `/admin/pumps/${encodeURIComponent(serialId)}/confirm-installation`,
+        {
+          method: 'POST',
+        },
+      );
+
+      setSuccess(response.message ?? 'Installation confirmed by admin');
+      await loadAdminData();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to confirm installation',
+      );
+    } finally {
+      setConfirmingSerialId('');
+    }
+  };
+
   const pumpDistribution = useMemo(
     () => [
       { label: 'Available', count: stats?.availablePumps ?? 0 },
@@ -283,26 +315,54 @@ export function AdminDashboard() {
     [stats],
   );
   const chartPalette = useMemo(() => getChartPalette(resolvedTheme), [resolvedTheme]);
+
+  const getPumpStatus = (pump: AdminPump): PumpCatalogStatus => {
+    if (pump.registeredAt) return 'registered';
+    if (!pump.purchasedAt) return 'available';
+    if (!pump.installationConfirmedAt) return 'purchased-awaiting-user';
+    if (!pump.adminInstallationConfirmedAt) return 'purchased-awaiting-admin';
+    return 'purchased-ready-register';
+  };
+
   const getPumpStatusClassName = (status: PumpCatalogStatus) => {
     switch (status) {
       case 'registered':
         return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200';
-      case 'purchased':
+      case 'purchased-ready-register':
+        return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-500/20 dark:text-cyan-200';
+      case 'purchased-awaiting-admin':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-200';
+      case 'purchased-awaiting-user':
+        return 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200';
       default:
         return 'bg-slate-100 text-slate-700 dark:bg-slate-700/50 dark:text-slate-200';
     }
   };
 
+  const getPumpStatusLabel = (status: PumpCatalogStatus) => {
+    switch (status) {
+      case 'registered':
+        return 'Registered';
+      case 'purchased-ready-register':
+        return 'Ready To Register';
+      case 'purchased-awaiting-admin':
+        return 'Awaiting Admin';
+      case 'purchased-awaiting-user':
+        return 'Awaiting User';
+      default:
+        return 'Available';
+    }
+  };
+
   return (
     <div className="p-4 md:p-8">
-      <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="mb-8 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="mb-2 text-3xl font-bold text-slate-900">Admin Control Center</h1>
+          <h1 className="mb-2 text-2xl font-bold text-slate-900 sm:text-3xl">Admin Control Center</h1>
           <p className="text-slate-600">Monitor the full platform and manage pump catalog inventory.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-end lg:w-auto">
+          <span className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 sm:w-auto">
             <span className="mr-2 inline-flex items-center gap-1">
               <Circle className={`h-3 w-3 ${connected ? 'fill-emerald-500 text-emerald-500' : 'fill-amber-500 text-amber-500'}`} />
               {connected ? 'Realtime Connected' : 'Realtime Disconnected'}
@@ -310,7 +370,7 @@ export function AdminDashboard() {
           </span>
           <button
             onClick={() => void loadAdminData()}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 sm:w-auto"
           >
             <RefreshCw className="h-4 w-4" />
             Refresh
@@ -318,7 +378,7 @@ export function AdminDashboard() {
         </div>
       </div>
 
-      {generatedAt && <p className="mb-4 text-xs text-slate-500">Last full sync: {new Date(generatedAt).toLocaleString()}</p>}
+      {generatedAt && <p className="mb-4 break-words text-xs text-slate-500">Last full sync: {new Date(generatedAt).toLocaleString()}</p>}
       {loading && (
         <div className="mb-4">
           <PumpLoadingIndicator size="md" label="Loading admin overview" />
@@ -496,7 +556,7 @@ export function AdminDashboard() {
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-300"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-300 sm:w-auto"
             >
               <PlusCircle className="h-4 w-4" />
               {submitting ? 'Adding...' : 'Add Pump'}
@@ -507,8 +567,65 @@ export function AdminDashboard() {
 
       <div className="mb-8 rounded-xl border border-slate-100 bg-white p-6 shadow-lg">
         <h2 className="mb-4 text-xl font-bold text-slate-900">Catalog Pumps</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[800px]">
+        <div className="space-y-3 xl:hidden">
+          {pumps.slice(0, 60).map((pump) => {
+            const status = getPumpStatus(pump);
+
+            return (
+              <div key={pump._id} className="rounded-lg border border-slate-200 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-900">{pump.name}</p>
+                    <p className="mt-1 break-all text-xs text-slate-600">{pump.serial_id}</p>
+                  </div>
+                  <span className={`w-fit rounded-full px-2 py-1 text-xs ${getPumpStatusClassName(status)}`}>
+                    {getPumpStatusLabel(status)}
+                  </span>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                  <p>Capacity: {pump.capacity.toLocaleString()} L</p>
+                  <p>Price: ${pump.price_usd.toFixed(2)}</p>
+                  <p className="col-span-2 break-all">Owner: {pump.owner?.email || 'Unassigned'}</p>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {status === 'purchased-awaiting-admin' && (
+                    <button
+                      onClick={() =>
+                        void handleAdminInstallationConfirm(pump.serial_id)
+                      }
+                      disabled={Boolean(confirmingSerialId)}
+                      className="inline-flex w-full items-center justify-center rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-300 sm:w-auto"
+                    >
+                      {confirmingSerialId === pump.serial_id
+                        ? 'Confirming...'
+                        : 'Confirm Install'}
+                    </button>
+                  )}
+                  {status === 'purchased-awaiting-user' && (
+                    <span className="text-xs text-amber-700">
+                      Waiting for user confirmation
+                    </span>
+                  )}
+                  {status === 'purchased-ready-register' && (
+                    <span className="text-xs text-cyan-700">
+                      User can register now
+                    </span>
+                  )}
+                  {status === 'registered' && (
+                    <span className="text-xs text-emerald-700">Completed</span>
+                  )}
+                  {status === 'available' && (
+                    <span className="text-xs text-slate-500">No action</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="hidden overflow-x-auto xl:block">
+          <table className="w-full min-w-[980px]">
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
                 <th className="px-2 py-3">Name</th>
@@ -517,15 +634,12 @@ export function AdminDashboard() {
                 <th className="px-2 py-3">Price</th>
                 <th className="px-2 py-3">Owner</th>
                 <th className="px-2 py-3">Status</th>
+                <th className="px-2 py-3">Actions</th>
               </tr>
             </thead>
             <tbody>
               {pumps.slice(0, 60).map((pump) => {
-                const status: PumpCatalogStatus = pump.registeredAt
-                  ? 'registered'
-                  : pump.purchasedAt
-                    ? 'purchased'
-                    : 'available';
+                const status = getPumpStatus(pump);
 
                 return (
                   <tr key={pump._id} className="border-b border-slate-100">
@@ -536,8 +650,39 @@ export function AdminDashboard() {
                     <td className="px-2 py-3 text-sm text-slate-600">{pump.owner?.email || 'Unassigned'}</td>
                     <td className="px-2 py-3 text-sm">
                       <span className={`rounded-full px-2 py-1 text-xs ${getPumpStatusClassName(status)}`}>
-                        {status}
+                        {getPumpStatusLabel(status)}
                       </span>
+                    </td>
+                    <td className="px-2 py-3 text-sm">
+                      {status === 'purchased-awaiting-admin' && (
+                        <button
+                          onClick={() =>
+                            void handleAdminInstallationConfirm(pump.serial_id)
+                          }
+                          disabled={Boolean(confirmingSerialId)}
+                          className="whitespace-nowrap rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-300"
+                        >
+                          {confirmingSerialId === pump.serial_id
+                            ? 'Confirming...'
+                            : 'Confirm Install'}
+                        </button>
+                      )}
+                      {status === 'purchased-awaiting-user' && (
+                        <span className="text-xs text-amber-700">
+                          Waiting for user confirmation
+                        </span>
+                      )}
+                      {status === 'purchased-ready-register' && (
+                        <span className="text-xs text-cyan-700">
+                          User can register now
+                        </span>
+                      )}
+                      {status === 'registered' && (
+                        <span className="text-xs text-emerald-700">Completed</span>
+                      )}
+                      {status === 'available' && (
+                        <span className="text-xs text-slate-500">No action</span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -553,9 +698,9 @@ export function AdminDashboard() {
           <div className="space-y-3">
             {recentAlerts.slice(0, 12).map((alert) => (
               <div key={alert.id} className="rounded-lg border border-slate-200 p-3">
-                <p className="text-sm font-medium text-slate-900">{alert.pumpName}</p>
-                <p className="text-xs text-slate-600">{alert.message}</p>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="break-words text-sm font-medium text-slate-900">{alert.pumpName}</p>
+                <p className="break-words text-xs text-slate-600">{alert.message}</p>
+                <p className="mt-1 break-words text-xs text-slate-500">
                   {alert.severity} • {alert.status} • {new Date(alert.timestamp).toLocaleString()}
                 </p>
               </div>
@@ -568,9 +713,9 @@ export function AdminDashboard() {
           <div className="space-y-3">
             {recentUsers.slice(0, 12).map((user) => (
               <div key={user.id} className="rounded-lg border border-slate-200 p-3">
-                <p className="text-sm font-medium text-slate-900">{user.name || user.email}</p>
-                <p className="text-xs text-slate-600">{user.email}</p>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="break-words text-sm font-medium text-slate-900">{user.name || user.email}</p>
+                <p className="break-all text-xs text-slate-600">{user.email}</p>
+                <p className="mt-1 break-words text-xs text-slate-500">
                   {user.role} • joined {new Date(user.createdAt).toLocaleString()}
                 </p>
               </div>
@@ -584,10 +729,10 @@ export function AdminDashboard() {
         <h2 className="mb-4 text-xl font-bold text-slate-900">Live Event Feed</h2>
         <div className="space-y-2">
           {liveEvents.slice(0, 20).map((event, index) => (
-            <div key={`${event.timestamp}-${index}`} className="flex items-center gap-3 rounded-lg border border-slate-200 p-2">
-              <Activity className={`h-4 w-4 ${event.type === 'alert' ? 'text-red-600' : 'text-blue-600'}`} />
-              <p className="text-sm text-slate-700">{event.text}</p>
-              <span className="ml-auto text-xs text-slate-500">{new Date(event.timestamp).toLocaleTimeString()}</span>
+            <div key={`${event.timestamp}-${index}`} className="flex flex-col items-start gap-2 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center">
+              <Activity className={`h-4 w-4 flex-shrink-0 ${event.type === 'alert' ? 'text-red-600' : 'text-blue-600'}`} />
+              <p className="break-words text-sm text-slate-700">{event.text}</p>
+              <span className="text-xs text-slate-500 sm:ml-auto">{new Date(event.timestamp).toLocaleTimeString()}</span>
             </div>
           ))}
           {liveEvents.length === 0 && (

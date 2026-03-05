@@ -8,8 +8,10 @@ import {
   T_Sensor,
 } from "../models/Sensor.js";
 import Pump from "../models/Pump.js";
-import { io } from "../server.js";
+import River from "../models/River.js";
 import { env } from "../config/env.js";
+import { getSocketIo } from "../services/socketService.js";
+import { resolveGeoFromRequest } from "../services/geolocationService.js";
 import { monitoringRoomsForOwner } from "../utils/realtimeRooms.js";
 
 const debug = createDebug("app:mqtt");
@@ -27,6 +29,8 @@ const SENSOR_TOPICS = [
   "/pump/temperature/#",
 ];
 const REMOTE_CONTROL_TOPIC = "esp_hardware";
+const EARTH_RADIUS_KM = 6371;
+const MAX_NEAREST_RIVERS = 5;
 
 let sensorClient = null;
 let remoteClient = null;
@@ -134,16 +138,19 @@ const maybeCreateAlert = async ({ pumpId, pumpName, ownerUserId, value, metric }
       severity: "critical",
       status: "active",
     });
-    io.to(monitoringRoomsForOwner(ownerUserId)).emit("alert:new", {
-      id: String(alert._id),
-      pumpId: String(alert.pump_id),
-      pumpName: pumpName || `Pump ${String(alert.pump_id)}`,
-      type: alert.type,
-      severity: alert.severity,
-      status: alert.status,
-      message: alert.message || alert.sensorValue,
-      timestamp: alert.createdAt || new Date(),
-    });
+    const io = getSocketIo();
+    if (io) {
+      io.to(monitoringRoomsForOwner(ownerUserId)).emit("alert:new", {
+        id: String(alert._id),
+        pumpId: String(alert.pump_id),
+        pumpName: pumpName || `Pump ${String(alert.pump_id)}`,
+        type: alert.type,
+        severity: alert.severity,
+        status: alert.status,
+        message: alert.message || alert.sensorValue,
+        timestamp: alert.createdAt || new Date(),
+      });
+    }
   }
 
   if (metric === "temperature" && numericValue > 95) {
@@ -155,16 +162,19 @@ const maybeCreateAlert = async ({ pumpId, pumpName, ownerUserId, value, metric }
       severity: "warning",
       status: "active",
     });
-    io.to(monitoringRoomsForOwner(ownerUserId)).emit("alert:new", {
-      id: String(alert._id),
-      pumpId: String(alert.pump_id),
-      pumpName: pumpName || `Pump ${String(alert.pump_id)}`,
-      type: alert.type,
-      severity: alert.severity,
-      status: alert.status,
-      message: alert.message || alert.sensorValue,
-      timestamp: alert.createdAt || new Date(),
-    });
+    const io = getSocketIo();
+    if (io) {
+      io.to(monitoringRoomsForOwner(ownerUserId)).emit("alert:new", {
+        id: String(alert._id),
+        pumpId: String(alert.pump_id),
+        pumpName: pumpName || `Pump ${String(alert.pump_id)}`,
+        type: alert.type,
+        severity: alert.severity,
+        status: alert.status,
+        message: alert.message || alert.sensorValue,
+        timestamp: alert.createdAt || new Date(),
+      });
+    }
   }
 };
 
@@ -330,6 +340,159 @@ const parseRemoteCommand = (message) => {
   return { command: "SPEED", speed };
 };
 
+const toRadians = (value) => (Number(value) * Math.PI) / 180;
+
+const haversineDistanceKm = (lat1, lon1, lat2, lon2) => {
+  const latitude1 = Number(lat1);
+  const longitude1 = Number(lon1);
+  const latitude2 = Number(lat2);
+  const longitude2 = Number(lon2);
+
+  if (
+    !Number.isFinite(latitude1) ||
+    !Number.isFinite(longitude1) ||
+    !Number.isFinite(latitude2) ||
+    !Number.isFinite(longitude2)
+  ) {
+    return Number.NaN;
+  }
+
+  const dLat = toRadians(latitude2 - latitude1);
+  const dLon = toRadians(longitude2 - longitude1);
+  const sinLat = Math.sin(dLat / 2);
+  const sinLon = Math.sin(dLon / 2);
+  const a =
+    sinLat * sinLat +
+    Math.cos(toRadians(latitude1)) *
+      Math.cos(toRadians(latitude2)) *
+      sinLon *
+      sinLon;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return EARTH_RADIUS_KM * c;
+};
+
+const toNearestRiverPayload = ({ river, distanceKm }) => ({
+  _id: String(river._id),
+  river_id: river.river_id,
+  river_name: river.river_name,
+  lat: Number(river.lat),
+  lon: Number(river.lon),
+  discharge_id: river.discharge_id,
+  discharge_value: String(river.discharge_value ?? ""),
+  distance_km: Number(distanceKm.toFixed(6)),
+});
+
+const toFiniteCoordinate = (value) => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const parseBooleanQueryValue = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  return ["1", "true", "yes", "on"].includes(normalized);
+};
+
+const persistResolvedUserGeo = async ({ user, lat, lon, ip }) => {
+  if (!user || typeof user !== "object") return;
+
+  let shouldSave = false;
+  if (lat !== null && lon !== null) {
+    if (toFiniteCoordinate(user.lat) !== lat) {
+      user.lat = lat;
+      shouldSave = true;
+    }
+    if (toFiniteCoordinate(user.lon) !== lon) {
+      user.lon = lon;
+      shouldSave = true;
+    }
+  }
+
+  if (ip && String(user.lastLoginIp || "") !== ip) {
+    user.lastLoginIp = ip;
+    shouldSave = true;
+  }
+
+  if (shouldSave && typeof user.save === "function") {
+    try {
+      await user.save();
+    } catch (error) {
+      debug("Failed to persist resolved user geolocation", error);
+    }
+  }
+};
+
+const resolveCoordinatesForNearestRivers = async (req) => {
+  const browserLat = toFiniteCoordinate(req?.query?.lat);
+  const browserLon = toFiniteCoordinate(req?.query?.lon);
+  if (browserLat !== null && browserLon !== null) {
+    await persistResolvedUserGeo({ user: req?.user, lat: browserLat, lon: browserLon, ip: "" });
+    return { lat: browserLat, lon: browserLon, source: "browser" };
+  }
+
+  const currentLat = toFiniteCoordinate(req?.user?.lat);
+  const currentLon = toFiniteCoordinate(req?.user?.lon);
+  if (currentLat !== null && currentLon !== null) {
+    return { lat: currentLat, lon: currentLon, source: "session" };
+  }
+
+  const allowServerFallback = parseBooleanQueryValue(
+    req?.query?.browser_location_denied,
+  );
+  if (!allowServerFallback) {
+    return null;
+  }
+
+  const geo = await resolveGeoFromRequest(req);
+  const lat = toFiniteCoordinate(geo?.lat);
+  const lon = toFiniteCoordinate(geo?.lon);
+  const ip = String(geo?.ip || "").trim();
+
+  await persistResolvedUserGeo({ user: req?.user, lat, lon, ip });
+
+  if (lat === null || lon === null) {
+    return null;
+  }
+
+  return { lat, lon, source: "ip" };
+};
+
+const findControllablePump = async ({ pumpSerialId, user }) => {
+  const normalizedSerialId = String(pumpSerialId || "").trim();
+  if (!normalizedSerialId) {
+    return { status: 400, message: "pump_id is required" };
+  }
+
+  const pump = await Pump.findOne({ serial_id: normalizedSerialId });
+  if (!pump) {
+    return { status: 404, message: "Pump not found" };
+  }
+
+  if (!user?._id || !pump.userId || String(pump.userId) !== String(user._id)) {
+    return {
+      status: 403,
+      message: "You can only control pumps that you own",
+    };
+  }
+
+  if (!pump.purchasedAt) {
+    return {
+      status: 403,
+      message: "Pump must be purchased before remote control is enabled",
+    };
+  }
+
+  if (!pump.registeredAt) {
+    return {
+      status: 403,
+      message: "Pump must be registered before remote control is enabled",
+    };
+  }
+
+  return { pump };
+};
+
 const publishRemotePayload = (topic, payload) =>
   new Promise((resolve, reject) => {
     remoteClient.publish(topic, payload, {}, (error) => {
@@ -340,6 +503,59 @@ const publishRemotePayload = (topic, payload) =>
       resolve();
     });
   });
+
+export const nearestRiversController = async (req, res) => {
+  try {
+    const coordinates = await resolveCoordinatesForNearestRivers(req);
+    if (!coordinates) {
+      return res.status(409).json({
+        message:
+          "Browser geolocation is required. Allow location access in your browser. Server fallback runs only when location permission is denied.",
+      });
+    }
+    const userLat = coordinates.lat;
+    const userLon = coordinates.lon;
+
+    const rivers = await River.find(
+      {},
+      {
+        _id: 1,
+        river_id: 1,
+        river_name: 1,
+        lat: 1,
+        lon: 1,
+        discharge_id: 1,
+        discharge_value: 1,
+      },
+    ).lean();
+
+    const nearest = (Array.isArray(rivers) ? rivers : [])
+      .map((river) => {
+        const distanceKm = haversineDistanceKm(userLat, userLon, river.lat, river.lon);
+        if (!Number.isFinite(distanceKm)) {
+          return null;
+        }
+
+        return { river, distanceKm };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+      .slice(0, MAX_NEAREST_RIVERS)
+      .map(toNearestRiverPayload);
+
+    return res.status(200).json({
+      user_location: {
+        lat: userLat,
+        lon: userLon,
+      },
+      location_source: coordinates.source,
+      rivers: nearest,
+    });
+  } catch (error) {
+    debug("nearestRiversController failed", error);
+    return res.status(500).json({ message: "Unable to fetch nearest rivers" });
+  }
+};
 
 export const mqttFn = () => {
   if (!env.enableMqtt) {
@@ -453,19 +669,99 @@ export const mqttFn = () => {
           value,
           metric,
         });
-        io.to(monitoringRoomsForOwner(pump.userId || null)).emit("sensor:update", {
-          pumpId: cacheKey,
-          pumpName: pump.name,
-          metric,
-          topic: messageTopic,
-          value,
-          timestamp: new Date().toISOString(),
-        });
+        const io = getSocketIo();
+        if (io) {
+          io.to(monitoringRoomsForOwner(pump.userId || null)).emit("sensor:update", {
+            pumpId: cacheKey,
+            pumpName: pump.name,
+            metric,
+            topic: messageTopic,
+            value,
+            timestamp: new Date().toISOString(),
+          });
+        }
       }
     } catch (error) {
       debug("MQTT message handling failed", error);
     }
   });
+};
+
+export const selectRiverController = async (req, res) => {
+  try {
+    if (!env.enableMqtt) {
+      return res.status(503).json({ message: "MQTT is disabled" });
+    }
+
+    if (!remoteClient) {
+      return res
+        .status(500)
+        .json({ message: "MQTT remote client not configured" });
+    }
+
+    if (!remoteClient.connected) {
+      return res
+        .status(503)
+        .json({ message: "MQTT remote client is not connected" });
+    }
+
+    const user = req.user;
+    const { pump_id, river_id } = req.body || {};
+    if (!pump_id || river_id === undefined || river_id === null) {
+      return res
+        .status(400)
+        .json({ message: "pump_id and river_id are required" });
+    }
+
+    const validatedPump = await findControllablePump({
+      pumpSerialId: pump_id,
+      user,
+    });
+    if (!validatedPump.pump) {
+      return res.status(validatedPump.status).json({
+        message: validatedPump.message || "Unable to validate pump",
+      });
+    }
+    const pump = validatedPump.pump;
+
+    const normalizedRiverId = String(river_id).trim();
+    const numericRiverId = Number(normalizedRiverId);
+    if (!normalizedRiverId || !Number.isFinite(numericRiverId)) {
+      return res.status(400).json({
+        message: "river_id must be a numeric value",
+      });
+    }
+
+    const river = await River.findOne({ river_id: numericRiverId }).lean();
+    if (!river) {
+      return res.status(404).json({ message: "River not found" });
+    }
+
+    const payload = JSON.stringify({
+      pump_id: String(pump.serial_id),
+      command: "RIVER_SELECT",
+      river_id: river.river_id,
+      river_name: String(river.river_name ?? "").trim(),
+      lat: Number(river.lat),
+      lon: Number(river.lon),
+      discharge: String(river.discharge_value ?? "").trim(),
+      discharge_id: river.discharge_id,
+      requested_by: String(user._id),
+      requested_at: new Date().toISOString(),
+    });
+
+    await publishRemotePayload(REMOTE_CONTROL_TOPIC, payload).catch((error) => {
+      debug("MQTT river selection publish failed", error);
+      throw error;
+    });
+
+    return res.status(200).json({
+      message: `River selection sent to ${REMOTE_CONTROL_TOPIC}`,
+    });
+  } catch (error) {
+    debug("selectRiverController failed", error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
 };
 
 export const remoteController = async (req, res) => {

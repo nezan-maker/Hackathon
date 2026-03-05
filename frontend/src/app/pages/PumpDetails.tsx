@@ -141,10 +141,10 @@ export function PumpDetails() {
       setLoading(true);
       setError('');
       try {
-        const data = await apiFetch<{ pumps?: BackendPump[] }>('/home');
+        const data = await apiFetch<{ pumps?: BackendPump[] }>('/my-pumps');
         const found = (data.pumps ?? []).find((item) => item._id === id);
         if (!found) {
-          setError('Pump not found');
+          setError('Pump not found in your purchased pumps');
           setPump(null);
         } else {
           setPump(found);
@@ -327,18 +327,18 @@ export function PumpDetails() {
 
       {!loading && pump && (
         <>
-          <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h1 className="mb-2 text-3xl text-gray-900">{pump.name}</h1>
-              <p className="text-gray-600">Serial: {pump.serial_id}</p>
+              <h1 className="mb-2 text-2xl text-gray-900 sm:text-3xl">{pump.name}</h1>
+              <p className="break-all text-gray-600">Serial: {pump.serial_id}</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <span
-                className={`rounded-lg px-4 py-2 text-sm ${statusClass}`}
+                className={`rounded-lg px-4 py-2 text-sm whitespace-nowrap ${statusClass}`}
               >
                 {statusLabel}
               </span>
-              <span className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+              <span className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 sm:w-auto">
                 <span className="mr-2 inline-flex items-center gap-1">
                   <Circle className={`h-3 w-3 ${connected ? 'fill-emerald-500 text-emerald-500' : 'fill-amber-500 text-amber-500'}`} />
                   {connected ? 'Live' : 'Offline'}
@@ -347,7 +347,7 @@ export function PumpDetails() {
             </div>
           </div>
 
-          <div className="mb-6 grid gap-4 md:grid-cols-4">
+          <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-xl bg-white p-4 shadow-md">
               <div className="mb-2 flex items-center gap-2">
                 <Gauge className="h-5 w-5 text-orange-600" />
@@ -474,11 +474,11 @@ export function PumpDetails() {
               </div>
             )}
             <div className="space-y-4">
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <button
                   onClick={() => void sendRemoteCommand('ON')}
                   disabled={controlLoading || !controlEnabled}
-                  className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:bg-green-300"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:bg-green-300 sm:w-auto"
                 >
                   <Play className="h-4 w-4" />
                   Start
@@ -486,7 +486,7 @@ export function PumpDetails() {
                 <button
                   onClick={() => void sendRemoteCommand('OFF')}
                   disabled={controlLoading || !controlEnabled}
-                  className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:bg-red-300"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:bg-red-300 sm:w-auto"
                 >
                   <Square className="h-4 w-4" />
                   Stop
@@ -494,7 +494,7 @@ export function PumpDetails() {
               </div>
 
               <div>
-                <div className="mb-2 flex items-center justify-between">
+                <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <label htmlFor="speed-control" className="text-sm text-gray-700">
                     Speed
                   </label>
@@ -512,7 +512,7 @@ export function PumpDetails() {
                 <button
                   onClick={() => void sendRemoteCommand(`SPEED:${speed}`)}
                   disabled={controlLoading || !controlEnabled}
-                  className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:bg-blue-300"
+                  className="mt-3 w-full rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:bg-blue-300 sm:w-auto"
                 >
                   Apply Speed
                 </button>
@@ -522,7 +522,7 @@ export function PumpDetails() {
                 <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-700">
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-                    <p>{controlMessage}</p>
+                    <p className="break-words">{controlMessage}</p>
                   </div>
                 </div>
               )}

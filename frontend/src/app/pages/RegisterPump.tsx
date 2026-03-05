@@ -13,6 +13,8 @@ interface BackendPump {
   userId?: string | null;
   purchasedAt?: string | null;
   registeredAt?: string | null;
+  installationConfirmedAt?: string | null;
+  adminInstallationConfirmedAt?: string | null;
 }
 
 export function RegisterPump() {
@@ -20,6 +22,7 @@ export function RegisterPump() {
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const serialIdFromQuery = (searchParams.get("serial_id") || "").trim();
+  const installationStatusFromQuery = (searchParams.get("installation") || "").trim();
 
   const [pumps, setPumps] = useState<BackendPump[]>([]);
   const [loadingPumps, setLoadingPumps] = useState(false);
@@ -40,6 +43,33 @@ export function RegisterPump() {
           !pump.registeredAt,
       ),
     [pumps, user?.id],
+  );
+
+  const ownedReadyForRegistration = useMemo(
+    () =>
+      ownedPurchasedUnregistered.filter((pump) =>
+        Boolean(pump.installationConfirmedAt) &&
+        Boolean(pump.adminInstallationConfirmedAt),
+      ),
+    [ownedPurchasedUnregistered],
+  );
+
+  const awaitingInstallationConfirmation = useMemo(
+    () =>
+      ownedPurchasedUnregistered.filter(
+        (pump) => !pump.installationConfirmedAt,
+      ),
+    [ownedPurchasedUnregistered],
+  );
+
+  const awaitingAdminApproval = useMemo(
+    () =>
+      ownedPurchasedUnregistered.filter(
+        (pump) =>
+          Boolean(pump.installationConfirmedAt) &&
+          !pump.adminInstallationConfirmedAt,
+      ),
+    [ownedPurchasedUnregistered],
   );
 
   const loadPumps = async () => {
@@ -68,10 +98,52 @@ export function RegisterPump() {
   }, [querySerialApplied, serialIdFromQuery]);
 
   useEffect(() => {
-    if (!serialId && ownedPurchasedUnregistered.length > 0) {
-      setSerialId(ownedPurchasedUnregistered[0].serial_id);
+    if (!serialId && ownedReadyForRegistration.length > 0) {
+      setSerialId(ownedReadyForRegistration[0].serial_id);
     }
-  }, [ownedPurchasedUnregistered, serialId]);
+  }, [ownedReadyForRegistration, serialId]);
+
+  useEffect(() => {
+    if (!installationStatusFromQuery) return;
+
+    if (installationStatusFromQuery === "confirmed") {
+      setSuccess("Installation confirmed. You can now register your pump.");
+      setError("");
+      return;
+    }
+
+    if (installationStatusFromQuery === "confirmed-awaiting-admin") {
+      setSuccess(
+        "Installation confirmed. Waiting for admin approval before registration is enabled.",
+      );
+      setError("");
+      return;
+    }
+
+    if (installationStatusFromQuery === "already-confirmed") {
+      setSuccess("Installation was already confirmed. You can register now.");
+      setError("");
+      return;
+    }
+
+    if (installationStatusFromQuery === "link-expired") {
+      setError(
+        "Installation confirmation link expired. Please request a new confirmation email.",
+      );
+      return;
+    }
+
+    if (installationStatusFromQuery === "invalid-link") {
+      setError("Installation confirmation link is invalid.");
+      return;
+    }
+
+    if (installationStatusFromQuery === "error") {
+      setError(
+        "Unable to confirm installation right now. Please try again shortly.",
+      );
+    }
+  }, [installationStatusFromQuery]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -104,15 +176,16 @@ export function RegisterPump() {
     <div className="p-4 md:p-8">
       <div className="mx-auto max-w-2xl">
         <div className="mb-8">
-          <h1 className="mb-2 text-3xl font-bold text-slate-900">
+          <h1 className="mb-2 text-2xl font-bold text-slate-900 sm:text-3xl">
             Register Purchased Pump
           </h1>
           <p className="text-slate-600">
-            Only pumps purchased by your account can be registered.
+            Only pumps purchased by your account and confirmed as installed can
+            be registered after admin approval.
           </p>
         </div>
 
-        <div className="rounded-xl border border-slate-100 bg-white p-8 shadow-lg">
+        <div className="rounded-xl border border-slate-100 bg-white p-5 shadow-lg sm:p-8">
           {error && (
             <div className="mb-6 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
               <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-600" />
@@ -139,12 +212,22 @@ export function RegisterPump() {
                 />
               ) : (
                 <p className="text-sm text-slate-600">
-                  {`You have ${ownedPurchasedUnregistered.length} purchased pump(s) ready for registration.`}
+                  {`You have ${ownedReadyForRegistration.length} pump(s) ready for registration.`}
+                </p>
+              )}
+              {!loadingPumps && awaitingInstallationConfirmation.length > 0 && (
+                <p className="mt-2 text-sm text-amber-700">
+                  {`${awaitingInstallationConfirmation.length} pump(s) are still waiting for installation confirmation from email.`}
+                </p>
+              )}
+              {!loadingPumps && awaitingAdminApproval.length > 0 && (
+                <p className="mt-2 text-sm text-indigo-700">
+                  {`${awaitingAdminApproval.length} pump(s) are waiting for admin approval after your confirmation.`}
                 </p>
               )}
             </div>
 
-            {ownedPurchasedUnregistered.length > 0 && (
+            {ownedReadyForRegistration.length > 0 && (
               <div>
                 <label
                   htmlFor="ownedPumps"
@@ -158,7 +241,7 @@ export function RegisterPump() {
                   onChange={(e) => setSerialId(e.target.value)}
                   className="block w-full rounded-lg border border-slate-300 px-4 py-3 font-medium focus:border-transparent focus:ring-2 focus:ring-blue-500"
                 >
-                  {ownedPurchasedUnregistered.map((pump) => (
+                  {ownedReadyForRegistration.map((pump) => (
                     <option key={pump._id} value={pump.serial_id}>
                       {pump.name} ({pump.serial_id}) -{" "}
                       {pump.capacity.toLocaleString()} L
@@ -194,36 +277,75 @@ export function RegisterPump() {
               <p className="flex items-start gap-2 text-sm text-blue-800">
                 <ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0" />
                 Registration will fail if this product key was not purchased by
-                your account.
+                your account or if installation confirmation is still pending.
               </p>
             </div>
 
-            {ownedPurchasedUnregistered.length === 0 && !loadingPumps && (
+            {ownedReadyForRegistration.length === 0 &&
+              awaitingInstallationConfirmation.length > 0 &&
+              !loadingPumps && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                  <p className="mb-3 text-sm font-medium text-amber-800">
+                    Installation confirmation is still pending for your
+                    purchased pump(s). Open the confirmation link sent to your
+                    email after purchase.
+                  </p>
+                  <Link
+                    to="/pumps"
+                    className="inline-flex rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500"
+                  >
+                    Go to My Pumps
+                  </Link>
+                </div>
+              )}
+
+            {ownedReadyForRegistration.length === 0 &&
+              awaitingInstallationConfirmation.length === 0 &&
+              awaitingAdminApproval.length > 0 &&
+              !loadingPumps && (
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4">
+                  <p className="mb-3 text-sm font-medium text-indigo-800">
+                    Your installation confirmation is complete. Waiting for
+                    admin approval before registration is enabled.
+                  </p>
+                  <Link
+                    to="/pumps"
+                    className="inline-flex rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+                  >
+                    Go to My Pumps
+                  </Link>
+                </div>
+              )}
+
+            {ownedReadyForRegistration.length === 0 &&
+              awaitingInstallationConfirmation.length === 0 &&
+              awaitingAdminApproval.length === 0 &&
+              !loadingPumps && (
               <div className="rounded-lg border border-sky-200 bg-sky-50 p-4">
                 <p className="mb-3 text-sm font-medium text-sky-800">
-                  You do not have a purchased pump pending registration.
+                  You do not have any pump ready for registration yet.
                 </p>
                 <Link
-                  to="/"
+                  to="/marketplace"
                   className="inline-flex rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-500"
                 >
-                  Go to Landing Page
+                  Go to Marketplace
                 </Link>
               </div>
             )}
 
-            <div className="flex gap-4">
+            <div className="flex flex-col gap-4 sm:flex-row">
               <button
                 type="button"
                 onClick={() => navigate("/pumps")}
-                className="flex-1 rounded-lg border border-slate-300 px-6 py-3 font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                className="w-full flex-1 rounded-lg border border-slate-300 px-6 py-3 font-medium text-slate-700 transition-colors hover:bg-slate-50"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-3 font-medium text-white shadow-lg transition-all hover:from-blue-700 hover:to-blue-800 hover:shadow-blue-600/30 disabled:cursor-not-allowed disabled:from-blue-400 disabled:to-blue-400"
+                className="inline-flex w-full flex-1 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-3 font-medium text-white shadow-lg transition-all hover:from-blue-700 hover:to-blue-800 hover:shadow-blue-600/30 disabled:cursor-not-allowed disabled:from-blue-400 disabled:to-blue-400"
               >
                 {loading ? (
                   <PumpLoadingIndicator size="sm" label="Registering pump" />

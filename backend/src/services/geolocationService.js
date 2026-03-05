@@ -4,15 +4,54 @@ import { getClientIp, isPublicRoutableIp } from "../utils/ip.js";
 
 const debug = createDebug("app:geolocation");
 
-const parseCoordinates = (payload) => {
-  const lat = Number(payload?.latitude ?? payload?.lat);
-  const lon = Number(payload?.longitude ?? payload?.lon);
+const toFiniteNumber = (value) => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-    return null;
+const parseCoordinatePair = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw.includes(",")) return null;
+  const [rawLat, rawLon] = raw.split(",", 2).map((part) => part.trim());
+  const lat = toFiniteNumber(rawLat);
+  const lon = toFiniteNumber(rawLon);
+  if (lat === null || lon === null) return null;
+  return { lat, lon };
+};
+
+const parseCoordinates = (payload) => {
+  const lat = toFiniteNumber(
+    payload?.latitude ??
+      payload?.lat ??
+      payload?.location?.latitude ??
+      payload?.location?.lat ??
+      payload?.geo?.latitude ??
+      payload?.geo?.lat,
+  );
+  const lon = toFiniteNumber(
+    payload?.longitude ??
+      payload?.lon ??
+      payload?.lng ??
+      payload?.location?.longitude ??
+      payload?.location?.lon ??
+      payload?.location?.lng ??
+      payload?.geo?.longitude ??
+      payload?.geo?.lon ??
+      payload?.geo?.lng,
+  );
+
+  if (lat !== null && lon !== null) {
+    return { lat, lon };
   }
 
-  return { lat, lon };
+  const locPair = parseCoordinatePair(payload?.loc ?? payload?.location);
+  if (locPair) {
+    return locPair;
+  }
+
+  return null;
 };
 
 export const resolveGeoFromIp = async (ip) => {
@@ -38,7 +77,7 @@ export const resolveGeoFromIp = async (ip) => {
     const payload = await response.json().catch(() => null);
     if (!payload) return null;
 
-    if (payload.success === false) {
+    if (payload.success === false || payload.status === "fail") {
       return null;
     }
 

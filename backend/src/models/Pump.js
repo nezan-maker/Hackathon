@@ -47,6 +47,25 @@ const pumpSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    installationConfirmedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    adminInstallationConfirmedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    installationConfirmationTokenHash: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    installationConfirmationExpiresAt: {
+      type: Date,
+      default: null,
+    },
     purchaseReceipt: {
       transactionId: {
         type: String,

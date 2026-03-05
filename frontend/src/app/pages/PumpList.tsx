@@ -11,10 +11,16 @@ interface BackendPump {
   capacity: number;
   purchasedAt?: string | null;
   registeredAt?: string | null;
+  installationConfirmedAt?: string | null;
+  adminInstallationConfirmedAt?: string | null;
   price_usd?: number;
 }
 
-type PumpStatus = 'purchased' | 'registered';
+type PumpStatus =
+  | 'awaiting-installation'
+  | 'awaiting-admin'
+  | 'ready-to-register'
+  | 'registered';
 
 interface Pump {
   id: string;
@@ -33,7 +39,10 @@ export function PumpList() {
   const [feedback, setFeedback] = useState<string>('');
 
   const mapPumpStatus = (pump: BackendPump): PumpStatus => {
-    return pump.registeredAt ? 'registered' : 'purchased';
+    if (pump.registeredAt) return 'registered';
+    if (!pump.installationConfirmedAt) return 'awaiting-installation';
+    if (!pump.adminInstallationConfirmedAt) return 'awaiting-admin';
+    return 'ready-to-register';
   };
 
   const loadPumps = async () => {
@@ -78,11 +87,22 @@ export function PumpList() {
     switch (status) {
       case 'registered':
         return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200';
-      case 'purchased':
+      case 'ready-to-register':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-200';
+      case 'awaiting-admin':
+        return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-200';
+      case 'awaiting-installation':
+        return 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200';
       default:
         return 'bg-slate-100 text-slate-800 dark:bg-slate-700/50 dark:text-slate-200';
     }
+  };
+
+  const getStatusLabel = (status: PumpStatus) => {
+    if (status === 'registered') return 'Registered';
+    if (status === 'ready-to-register') return 'Ready To Register';
+    if (status === 'awaiting-admin') return 'Awaiting Admin';
+    return 'Awaiting Installation';
   };
 
   const handleRegisterOwnedPump = async (serialId: string) => {
@@ -102,8 +122,8 @@ export function PumpList() {
   return (
     <div className="p-4 md:p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">My Pumps</h1>
-        <p className="text-slate-600">Only pumps purchased by your account are shown here.</p>
+        <h1 className="mb-2 text-2xl font-bold text-slate-900 sm:text-3xl">My Pumps</h1>
+        <p className="text-slate-600">Purchased pumps are shown here. Confirm installation from email before registration.</p>
       </div>
 
       {feedback && (
@@ -122,23 +142,89 @@ export function PumpList() {
               className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-medium"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Filter className="h-5 w-5 text-slate-400" />
+          <div className="flex w-full items-center gap-2 md:w-auto">
+            <Filter className="h-5 w-5 flex-shrink-0 text-slate-400" />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-medium"
+              className="w-full rounded-lg border border-slate-300 px-4 py-2.5 font-medium focus:border-transparent focus:ring-2 focus:ring-blue-500 md:w-auto"
             >
               <option value="all">All</option>
-              <option value="purchased">Purchased (Mine)</option>
+              <option value="awaiting-installation">Awaiting Installation Confirmation</option>
+              <option value="awaiting-admin">Awaiting Admin Approval</option>
+              <option value="ready-to-register">Ready To Register</option>
               <option value="registered">Registered (Mine)</option>
             </select>
           </div>
         </div>
       </div>
 
-      <div className="hidden lg:block bg-white rounded-xl shadow-lg overflow-hidden border border-slate-100">
-        <table className="w-full">
+      <div className="space-y-4 lg:hidden">
+        {filteredPumps.map((pump) => (
+          <div key={pump.id} className="rounded-xl border border-slate-100 bg-white p-4 shadow-lg">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <p className="font-medium text-slate-900">{pump.name}</p>
+                <p className="mt-1 break-all text-xs text-slate-600">Product Key: {pump.serialId}</p>
+              </div>
+              <span className={`inline-flex items-center gap-1.5 self-start rounded-full px-3 py-1 text-xs font-medium ${getStatusColor(pump.status)}`}>
+                {pump.status === 'registered' && <Activity className="h-4 w-4" />}
+                {getStatusLabel(pump.status)}
+              </span>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-lg bg-slate-50 px-3 py-2">
+                <p className="text-xs text-slate-500">Capacity</p>
+                <p className="font-medium text-slate-900">{pump.capacity.toLocaleString()} L</p>
+              </div>
+              <div className="rounded-lg bg-slate-50 px-3 py-2">
+                <p className="text-xs text-slate-500">Price</p>
+                <p className="font-medium text-slate-900">${pump.priceUsd.toFixed(2)}</p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <Link
+                to={`/pumps/${pump.id}`}
+                className="inline-flex w-full items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-medium text-white shadow-lg transition-all hover:from-blue-700 hover:to-blue-800 hover:shadow-blue-600/30 sm:w-auto"
+              >
+                View
+              </Link>
+
+              {pump.status === 'awaiting-installation' && (
+                <span className="inline-flex w-full items-center justify-center rounded-lg bg-amber-100 px-4 py-2 text-sm font-medium text-amber-800 sm:w-auto">
+                  Confirm via Email
+                </span>
+              )}
+
+              {pump.status === 'awaiting-admin' && (
+                <span className="inline-flex w-full items-center justify-center rounded-lg bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-800 sm:w-auto">
+                  Waiting Admin
+                </span>
+              )}
+
+              {pump.status === 'ready-to-register' && (
+                <button
+                  onClick={() => void handleRegisterOwnedPump(pump.serialId)}
+                  className="w-full rounded-lg bg-gradient-to-r from-indigo-600 to-indigo-700 px-4 py-2 text-sm font-medium text-white shadow-lg transition-all hover:from-indigo-700 hover:to-indigo-800 sm:w-auto"
+                >
+                  Register
+                </button>
+              )}
+
+              {pump.status === 'registered' && (
+                <span className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-100 px-4 py-2 text-sm font-medium text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200 sm:w-auto">
+                  Registered
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-xl border border-slate-100 bg-white shadow-lg lg:block">
+        <table className="min-w-[980px] w-full">
           <thead className="bg-gradient-to-r from-slate-800 to-slate-700">
             <tr>
               <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Pump Name</th>
@@ -159,7 +245,7 @@ export function PumpList() {
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(pump.status)}`}>
                     {pump.status === 'registered' && <Activity className="h-4 w-4" />}
-                    {pump.status.charAt(0).toUpperCase() + pump.status.slice(1)}
+                    {getStatusLabel(pump.status)}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-slate-900 font-medium">{pump.capacity.toLocaleString()} L</td>
@@ -172,7 +258,19 @@ export function PumpList() {
                     View
                   </Link>
 
-                  {pump.status === 'purchased' && (
+                  {pump.status === 'awaiting-installation' && (
+                    <span className="inline-flex items-center rounded-lg bg-amber-100 px-4 py-2 text-sm font-medium text-amber-800">
+                      Confirm via Email
+                    </span>
+                  )}
+
+                  {pump.status === 'awaiting-admin' && (
+                    <span className="inline-flex items-center rounded-lg bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-800">
+                      Waiting Admin
+                    </span>
+                  )}
+
+                  {pump.status === 'ready-to-register' && (
                     <button
                       onClick={() => void handleRegisterOwnedPump(pump.serialId)}
                       className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white text-sm rounded-lg hover:from-indigo-700 hover:to-indigo-800 transition-all font-medium shadow-lg"
@@ -205,11 +303,11 @@ export function PumpList() {
             No purchased pumps found for your account.
           </p>
           <Link
-            to="/"
+            to="/marketplace"
             className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
           >
             <ShoppingCart className="h-4 w-4" />
-            Buy Pump From Landing Page
+            Go to Marketplace
           </Link>
         </div>
       )}

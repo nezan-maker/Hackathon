@@ -259,12 +259,12 @@ export function Alerts() {
 
   return (
     <div className="p-4 md:p-8">
-      <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="mb-8 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="mb-2 text-3xl text-gray-900">Realtime System Alerts</h1>
+          <h1 className="mb-2 text-2xl text-gray-900 sm:text-3xl">Realtime System Alerts</h1>
           <p className="text-gray-600">Monitor and manage all MQTT-triggered notifications</p>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+        <div className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 sm:w-auto">
           <p className="flex items-center gap-2">
             <Circle className={`h-3 w-3 ${connected ? 'fill-emerald-500 text-emerald-500' : 'fill-amber-500 text-amber-500'}`} />
             {connected ? 'Realtime Connected' : 'Realtime Disconnected'}
@@ -284,7 +284,7 @@ export function Alerts() {
           <div className="flex items-center justify-between">
             <div>
               <p className="mb-1 text-gray-600">Active Alerts</p>
-              <p className="text-3xl text-gray-900">{activeCount}</p>
+              <p className="text-2xl text-gray-900 sm:text-3xl">{activeCount}</p>
             </div>
             <div className="rounded-lg bg-red-100 p-3">
               <AlertTriangle className="h-8 w-8 text-red-600" />
@@ -296,7 +296,7 @@ export function Alerts() {
           <div className="flex items-center justify-between">
             <div>
               <p className="mb-1 text-gray-600">Critical</p>
-              <p className="text-3xl text-gray-900">{criticalCount}</p>
+              <p className="text-2xl text-gray-900 sm:text-3xl">{criticalCount}</p>
             </div>
             <div className="rounded-lg bg-red-100 p-3">
               <AlertOctagon className="h-8 w-8 text-red-600" />
@@ -308,7 +308,7 @@ export function Alerts() {
           <div className="flex items-center justify-between">
             <div>
               <p className="mb-1 text-gray-600">Resolved</p>
-              <p className="text-3xl text-gray-900">{resolvedCount}</p>
+              <p className="text-2xl text-gray-900 sm:text-3xl">{resolvedCount}</p>
             </div>
             <div className="rounded-lg bg-green-100 p-3">
               <CheckCircle className="h-8 w-8 text-green-600" />
@@ -352,7 +352,7 @@ export function Alerts() {
       </div>
 
       <div className="mb-6 rounded-xl bg-white p-4 shadow-md">
-        <div className="flex flex-col gap-4 md:flex-row">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center">
           <div className="flex items-center gap-2">
             <Filter className="h-5 w-5 text-gray-400" />
             <span className="text-gray-700">Filters:</span>
@@ -360,7 +360,7 @@ export function Alerts() {
           <select
             value={filterSeverity}
             onChange={(e) => setFilterSeverity(e.target.value)}
-            className="rounded-lg border border-gray-300 px-4 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500 md:w-auto"
           >
             <option value="all">All Severities</option>
             <option value="critical">Critical</option>
@@ -370,7 +370,7 @@ export function Alerts() {
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="rounded-lg border border-gray-300 px-4 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500 md:w-auto"
           >
             <option value="all">All Statuses</option>
             <option value="active">Active</option>
@@ -384,41 +384,41 @@ export function Alerts() {
         {filteredAlerts.map((alert) => {
           const Icon = getAlertIcon(alert.type);
           return (
-            <div key={alert.id} className={`rounded-xl border p-6 ${getSeverityColor(alert.severity)}`}>
-              <div className="flex items-start gap-4">
+            <div key={alert.id} className={`rounded-xl border p-4 sm:p-6 ${getSeverityColor(alert.severity)}`}>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                 <div className={`rounded-lg bg-white p-3 ${getSeverityIconColor(alert.severity)}`}>
                   <Icon className="h-6 w-6" />
                 </div>
                 <div className="flex-1">
-                  <div className="mb-2 flex items-start justify-between">
+                  <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <h3 className="mb-1 text-lg text-gray-900">{alert.pumpName}</h3>
-                      <p className="text-sm text-gray-600">Pump ID: {alert.pumpId}</p>
+                      <p className="break-all text-sm text-gray-600">Pump ID: {alert.pumpId}</p>
                     </div>
                     {getStatusBadge(alert.status)}
                   </div>
-                  <p className="mb-3 text-gray-800">{alert.message}</p>
+                  <p className="mb-3 break-words text-gray-800">{alert.message}</p>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-center gap-4 text-sm text-gray-600">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-600">
                       <span className="capitalize">{alert.type.replace('-', ' ')}</span>
-                      <span>•</span>
+                      <span className="hidden text-gray-400 sm:inline">•</span>
                       <span className="capitalize">{alert.severity}</span>
-                      <span>•</span>
+                      <span className="hidden text-gray-400 sm:inline">•</span>
                       <span>{formatTimestamp(alert.timestamp)}</span>
                     </div>
                     {alert.status !== 'resolved' && (
-                      <div className="flex gap-2">
+                      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                         {alert.status === 'active' && (
                           <button
                             onClick={() => void updateAlertStatus(alert.id, 'acknowledge')}
-                            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50"
+                            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 sm:w-auto"
                           >
                             Acknowledge
                           </button>
                         )}
                         <button
                           onClick={() => void updateAlertStatus(alert.id, 'resolve')}
-                          className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white transition-colors hover:bg-blue-700"
+                          className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm text-white transition-colors hover:bg-blue-700 sm:w-auto"
                         >
                           Resolve
                         </button>
@@ -433,9 +433,9 @@ export function Alerts() {
       </div>
 
       {filteredAlerts.length === 0 && !loading && (
-        <div className="rounded-xl bg-white p-12 text-center shadow-md">
+        <div className="rounded-xl bg-white p-8 text-center shadow-md sm:p-12">
           <CheckCircle className="mx-auto mb-4 h-16 w-16 text-green-600" />
-          <h2 className="mb-2 text-2xl text-gray-900">No Alerts Found</h2>
+          <h2 className="mb-2 text-xl text-gray-900 sm:text-2xl">No Alerts Found</h2>
           <p className="text-gray-600">No alerts match your current filters</p>
         </div>
       )}

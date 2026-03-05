@@ -27,6 +27,7 @@ import { requestLogger } from "./middleware/requestLogger.js";
 import { verifyAccessToken } from "./services/tokenService.js";
 import { getMetricsSnapshot, metricsMiddleware } from "./services/metricsService.js";
 import { reportError } from "./services/errorReporter.js";
+import { setSocketIo } from "./services/socketService.js";
 import { isAdminUser } from "./utils/accessControl.js";
 import { ADMIN_MONITOR_ROOM, userMonitorRoom } from "./utils/realtimeRooms.js";
 
@@ -81,6 +82,8 @@ export const io = new Server(server, {
     skipMiddlewares: true,
   },
 });
+
+setSocketIo(io);
 
 const parseCookieHeader = (cookieHeader) => {
   const entries = String(cookieHeader || "")

@@ -4,17 +4,18 @@ import createDebug from "debug";
 import Pump from "../models/Pump.js";
 import { Alert } from "../models/Sensor.js";
 import { env } from "../config/env.js";
-import { io } from "../server.js";
-import { isAdminUser } from "../utils/accessControl.js";
+import { filterPumpsOwnedByUser, isAdminUser } from "../utils/accessControl.js";
 import { monitoringRoomsForOwner } from "../utils/realtimeRooms.js";
 import { calculatePumpPrice } from "../utils/pricing.js";
 import { normalizeCloudinaryUrl } from "../utils/cloudinary.js";
+import { getSocketIo } from "../services/socketService.js";
 import {
   getPaymentIntent,
   isStripeEnabled,
 } from "../services/stripeService.js";
 
 const debug = createDebug("app:purchase");
+const INSTALL_CONFIRM_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const createMailerTransport = () => {
   if (!env.smtpUser || !env.smtpPass) {
@@ -66,6 +67,166 @@ const buildRegisterPumpLink = (serialId) =>
   `${getFrontendBaseUrl()}/register-pump?serial_id=${encodeURIComponent(
     String(serialId || "").trim(),
   )}`;
+
+const getBackendBaseUrl = (req) => {
+  const explicit = String(env.backendAppUrl || "").trim();
+  if (explicit) {
+    return explicit.replace(/\/+$/, "");
+  }
+
+  const forwardedProto = String(req?.headers?.["x-forwarded-proto"] || "")
+    .split(",")[0]
+    ?.trim();
+  const protocol = forwardedProto || req?.protocol || "http";
+  const host =
+    (typeof req?.get === "function" ? String(req.get("host") || "") : "")
+      .trim();
+
+  if (host) {
+    return `${protocol}://${host}`.replace(/\/+$/, "");
+  }
+
+  return "http://localhost:5500";
+};
+
+const hashToken = (token) =>
+  crypto.createHash("sha256").update(String(token || "")).digest("hex");
+
+const buildInstallationConfirmationLink = ({ req, serialId, token }) =>
+  `${getBackendBaseUrl(req)}/installations/confirm?serial_id=${encodeURIComponent(
+    String(serialId || "").trim(),
+  )}&token=${encodeURIComponent(String(token || "").trim())}`;
+
+const buildRegisterRedirectLink = ({ serialId, installationStatus }) => {
+  const redirectUrl = new URL(`${getFrontendBaseUrl()}/register-pump`);
+  const normalizedSerialId = String(serialId || "").trim();
+  const normalizedStatus = String(installationStatus || "").trim();
+
+  if (normalizedSerialId) {
+    redirectUrl.searchParams.set("serial_id", normalizedSerialId);
+  }
+  if (normalizedStatus) {
+    redirectUrl.searchParams.set("installation", normalizedStatus);
+  }
+
+  return redirectUrl.toString();
+};
+
+const redirectToRegisterWithInstallationState = (res, payload) =>
+  res.redirect(buildRegisterRedirectLink(payload));
+
+const buildInstallationConfirmationEmailHtml = ({
+  serialId,
+  installationConfirmationLink,
+  registrationLink,
+}) => `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #f0f2f5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+  <tr>
+    <td align="center" style="padding: 40px 16px;">
+      <table cellpadding="0" cellspacing="0" role="presentation" style="
+          background: #ffffff;
+          margin: 0 auto;
+          max-width: 600px;
+          width: 100%;
+          border-radius: 12px;
+          overflow: hidden;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        ">
+        <tr>
+          <td style="
+              background: linear-gradient(135deg, #001f3f, #003366);
+              padding: 30px;
+              text-align: center;
+              color: #ffffff;
+            ">
+            <h1 style="
+                margin: 0;
+                font-size: 22px;
+                font-weight: 600;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+              ">
+              Purchase Confirmed
+            </h1>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding: 40px 30px; text-align: center; background-color: #ffffff;">
+            <p style="
+                font-size: 16px;
+                line-height: 1.6;
+                color: #4b5563;
+                margin: 0 0 20px;
+              ">
+              Your <strong>FlowBOT</strong> purchase is complete. Product key:
+            </p>
+
+            <div style="
+                display: inline-block;
+                padding: 14px 28px;
+                margin: 0 0 24px;
+                background-color: #f8fafc;
+                border-radius: 8px;
+                border: 2px solid #e2e8f0;
+              ">
+              <span style="
+                  font-size: 28px;
+                  font-weight: 800;
+                  letter-spacing: 4px;
+                  color: #001f3f;
+                ">
+                ${String(serialId || "").trim()}
+              </span>
+            </div>
+
+            <p style="
+                font-size: 15px;
+                line-height: 1.6;
+                color: #4b5563;
+                margin: 0 0 22px;
+              ">
+              After installation is complete, click the button below to confirm installation. An admin will review and approve it, then you can register your pump and start remote monitoring.
+            </p>
+
+            <a href="${installationConfirmationLink}" style="
+                display: inline-block;
+                background: #001f3f;
+                color: #ffffff;
+                font-weight: 600;
+                text-decoration: none;
+                border-radius: 8px;
+                padding: 12px 24px;
+                margin: 0 0 20px;
+              ">
+              Confirm Installation
+            </a>
+
+            <p style="font-size: 13px; color: #64748b; margin: 0;">
+              If the button does not work, use this link:<br />
+              <a href="${installationConfirmationLink}" style="color: #0f4c81; word-break: break-all;">${installationConfirmationLink}</a>
+            </p>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="
+              background-color: #f1f5f9;
+              padding: 24px;
+              text-align: center;
+              font-size: 13px;
+              color: #64748b;
+              border-top: 1px solid #e2e8f0;
+            ">
+            <p style="margin: 0 0 8px; line-height: 1.5;">
+              Registration page: <a href="${registrationLink}" style="color: #0f4c81;">${registrationLink}</a>
+            </p>
+            <p style="margin: 0; font-weight: 600; color: #001f3f;">© 2026 FlowBot Inc. All rights reserved.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
 
 const maskCardNumber = (cardNumber) => {
   const digits = String(cardNumber).replace(/\D/g, "");
@@ -174,7 +335,9 @@ export const registerPump = async (req, res) => {
       return res.status(400).json({ message: "serial_id is required" });
     }
 
-    const pump = await Pump.findOne({ serial_id: String(serial_id).trim() });
+    const pump = await Pump.findOne({ serial_id: String(serial_id).trim() }).select(
+      "+installationConfirmationTokenHash",
+    );
     if (!pump) {
       return res.status(404).json({ message: "Pump not found" });
     }
@@ -188,6 +351,25 @@ export const registerPump = async (req, res) => {
     if (!pump.purchasedAt) {
       return res.status(403).json({
         message: "Pump must be purchased before it can be registered",
+      });
+    }
+
+    const installationWorkflowEnabled =
+      Boolean(pump.installationConfirmationTokenHash) ||
+      Boolean(pump.installationConfirmedAt) ||
+      Boolean(pump.adminInstallationConfirmedAt);
+
+    if (installationWorkflowEnabled && !pump.installationConfirmedAt) {
+      return res.status(403).json({
+        message:
+          "Complete installation from the confirmation email before registering this pump",
+      });
+    }
+
+    if (installationWorkflowEnabled && !pump.adminInstallationConfirmedAt) {
+      return res.status(403).json({
+        message:
+          "Installation is waiting for admin confirmation before registration is allowed",
       });
     }
 
@@ -205,6 +387,77 @@ export const registerPump = async (req, res) => {
   } catch (error) {
     debug("registerPump failed", error);
     return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const confirmPumpInstallation = async (req, res) => {
+  const serialId = String(req.query?.serial_id || "").trim();
+
+  try {
+    const token = String(req.query?.token || "").trim();
+    if (!serialId || !token) {
+      return redirectToRegisterWithInstallationState(res, {
+        serialId,
+        installationStatus: "invalid-link",
+      });
+    }
+
+    const tokenHash = hashToken(token);
+    const pump = await Pump.findOne({ serial_id: serialId }).select(
+      "+installationConfirmationTokenHash",
+    );
+
+    if (!pump) {
+      return redirectToRegisterWithInstallationState(res, {
+        serialId,
+        installationStatus: "invalid-link",
+      });
+    }
+
+    if (pump.installationConfirmedAt) {
+      return redirectToRegisterWithInstallationState(res, {
+        serialId: pump.serial_id,
+        installationStatus: "already-confirmed",
+      });
+    }
+
+    if (
+      !pump.installationConfirmationTokenHash ||
+      pump.installationConfirmationTokenHash !== tokenHash
+    ) {
+      return redirectToRegisterWithInstallationState(res, {
+        serialId: pump.serial_id,
+        installationStatus: "invalid-link",
+      });
+    }
+
+    if (
+      !pump.installationConfirmationExpiresAt ||
+      pump.installationConfirmationExpiresAt < new Date()
+    ) {
+      return redirectToRegisterWithInstallationState(res, {
+        serialId: pump.serial_id,
+        installationStatus: "link-expired",
+      });
+    }
+
+    pump.installationConfirmedAt = new Date();
+    pump.installationConfirmationTokenHash = null;
+    pump.installationConfirmationExpiresAt = null;
+    await pump.save();
+
+    return redirectToRegisterWithInstallationState(res, {
+      serialId: pump.serial_id,
+      installationStatus: pump.adminInstallationConfirmedAt
+        ? "confirmed"
+        : "confirmed-awaiting-admin",
+    });
+  } catch (error) {
+    debug("confirmPumpInstallation failed", error);
+    return redirectToRegisterWithInstallationState(res, {
+      serialId,
+      installationStatus: "error",
+    });
   }
 };
 
@@ -228,10 +481,13 @@ export const myPurchasedPumps = async (req, res) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const pumps = await Pump.find({
-      userId: String(req.user._id),
-      purchasedAt: { $ne: null },
+    const pumpCandidates = await Pump.find({
+      userId: { $exists: true, $ne: null },
     }).sort({ purchasedAt: -1, createdAt: -1 });
+    const normalizedUserId = String(req.user._id);
+    const pumps = pumpCandidates.filter(
+      (pump) => String(pump.userId || "").trim() === normalizedUserId,
+    );
 
     const mappedPumps = pumps.map((pump) => ({
       ...pump.toObject(),
@@ -295,7 +551,9 @@ export const purchasePump = async (req, res) => {
       return res.status(400).json({ message: "serial_id is required" });
     }
 
-    const pump = await Pump.findOne({ serial_id: String(serial_id).trim() });
+    const pump = await Pump.findOne({ serial_id: String(serial_id).trim() }).select(
+      "+installationConfirmationTokenHash",
+    );
     if (!pump) {
       return res.status(404).json({ message: "Pump not found" });
     }
@@ -313,6 +571,15 @@ export const purchasePump = async (req, res) => {
         message: "You already purchased this pump",
         serial_id: pump.serial_id,
         transaction_id: pump.purchaseReceipt?.transactionId || null,
+        installation_confirmed: Boolean(pump.installationConfirmedAt),
+        admin_installation_confirmed: Boolean(pump.adminInstallationConfirmedAt),
+        installation_confirmation_required:
+          Boolean(pump.installationConfirmationTokenHash) &&
+          !pump.installationConfirmedAt,
+        registration_allowed:
+          Boolean(pump.installationConfirmedAt) &&
+          Boolean(pump.adminInstallationConfirmedAt),
+        registered_at: pump.registeredAt || null,
       });
     }
 
@@ -380,8 +647,19 @@ export const purchasePump = async (req, res) => {
       cardBrand = detectCardBrand(req.body.cardNumber);
     }
 
+    const installationConfirmationToken = crypto.randomBytes(32).toString("hex");
+    const installationConfirmationTokenHash = hashToken(installationConfirmationToken);
+    const installationConfirmationExpiresAt = new Date(
+      Date.now() + INSTALL_CONFIRM_TTL_MS,
+    );
+
     pump.userId = String(user._id);
     pump.purchasedAt = new Date();
+    pump.registeredAt = null;
+    pump.installationConfirmedAt = null;
+    pump.adminInstallationConfirmedAt = null;
+    pump.installationConfirmationTokenHash = installationConfirmationTokenHash;
+    pump.installationConfirmationExpiresAt = installationConfirmationExpiresAt;
     pump.purchaseReceipt = {
       transactionId,
       cardLast4,
@@ -392,6 +670,11 @@ export const purchasePump = async (req, res) => {
     await pump.save();
 
     const registrationLink = buildRegisterPumpLink(pump.serial_id);
+    const installationConfirmationLink = buildInstallationConfirmationLink({
+      req,
+      serialId: pump.serial_id,
+      token: installationConfirmationToken,
+    });
     const transporter = createMailerTransport();
     let buyerEmailSent = false;
     let adminEmailSent = false;
@@ -404,11 +687,19 @@ export const purchasePump = async (req, res) => {
           .sendMail({
             from: env.smtpUser,
             to: user.email,
-            subject: "FlowBot Pump Product Key",
+            subject: "FlowBot Pump Installation Confirmation",
             text: [
-              `Your product key is ${pump.serial_id}.`,
-              `Register your pump: ${registrationLink}`,
+              "Your pump purchase is complete.",
+              `Product key: ${pump.serial_id}.`,
+              `Confirm installation: ${installationConfirmationLink}`,
+              "After confirmation, admin must approve installation before registration is enabled.",
+              `Registration page: ${registrationLink}`,
             ].join("\n"),
+            html: buildInstallationConfirmationEmailHtml({
+              serialId: pump.serial_id,
+              installationConfirmationLink,
+              registrationLink,
+            }),
           })
           .then(() => {
             buyerEmailSent = true;
@@ -427,6 +718,7 @@ export const purchasePump = async (req, res) => {
               subject: `FlowBot purchase: pump ${pump.serial_id}`,
               text: [
                 `User ${user.email} purchased pump ${pump.serial_id}.`,
+                `Installation confirmation link: ${installationConfirmationLink}`,
                 `Registration link: ${registrationLink}`,
               ].join("\n"),
             })
@@ -444,10 +736,12 @@ export const purchasePump = async (req, res) => {
 
     return res.status(200).json({
       message: buyerEmailSent
-        ? "Purchase completed successfully. Pump product key has been sent to your email."
-        : "Purchase completed successfully. Email service is unavailable, use serial_id and registration_link from response.",
+        ? "Purchase completed successfully. Confirm installation from email; admin approval is required before registration."
+        : "Purchase completed successfully. Email service is unavailable, use installation_confirmation_link from response.",
       serial_id: pump.serial_id,
       registration_link: registrationLink,
+      installation_confirmation_link: installationConfirmationLink,
+      installation_confirmation_expires_at: installationConfirmationExpiresAt.toISOString(),
       admin_notified: adminEmailSent,
       transaction_id: transactionId,
       amount_usd: amountUsd,
@@ -468,10 +762,13 @@ export const getAlerts = async (req, res) => {
     }
 
     const admin = isAdminUser(user);
-    const pumpFilter = admin
-      ? {}
-      : { userId: String(user._id), purchasedAt: { $ne: null } };
-    const pumps = await Pump.find(pumpFilter, { serial_id: 1, name: 1 }).lean();
+    const pumpCandidates = await Pump.find(
+      admin ? {} : { userId: { $exists: true, $ne: null } },
+      { serial_id: 1, name: 1, userId: 1 },
+    ).lean();
+    const pumps = admin
+      ? pumpCandidates
+      : filterPumpsOwnedByUser(pumpCandidates, user);
     const pumpSerialIds = pumps.map((pump) => String(pump.serial_id));
 
     const alertFilter =
@@ -557,13 +854,16 @@ export const acknowledgeAlert = async (req, res) => {
     alert.status = "acknowledged";
     alert.acknowledgedAt = new Date();
     await alert.save();
-    io.to(monitoringRoomsForOwner(pump?.userId || null)).emit("alert:updated", {
-      id: String(alert._id),
-      status: alert.status,
-      acknowledgedAt: alert.acknowledgedAt,
-      resolvedAt: alert.resolvedAt,
-      timestamp: alert.createdAt,
-    });
+    const io = getSocketIo();
+    if (io) {
+      io.to(monitoringRoomsForOwner(pump?.userId || null)).emit("alert:updated", {
+        id: String(alert._id),
+        status: alert.status,
+        acknowledgedAt: alert.acknowledgedAt,
+        resolvedAt: alert.resolvedAt,
+        timestamp: alert.createdAt,
+      });
+    }
 
     return res.status(200).json({ message: "Alert acknowledged successfully" });
   } catch (error) {
@@ -604,13 +904,16 @@ export const resolveAlert = async (req, res) => {
     }
     alert.resolvedAt = new Date();
     await alert.save();
-    io.to(monitoringRoomsForOwner(pump?.userId || null)).emit("alert:updated", {
-      id: String(alert._id),
-      status: alert.status,
-      acknowledgedAt: alert.acknowledgedAt,
-      resolvedAt: alert.resolvedAt,
-      timestamp: alert.createdAt,
-    });
+    const io = getSocketIo();
+    if (io) {
+      io.to(monitoringRoomsForOwner(pump?.userId || null)).emit("alert:updated", {
+        id: String(alert._id),
+        status: alert.status,
+        acknowledgedAt: alert.acknowledgedAt,
+        resolvedAt: alert.resolvedAt,
+        timestamp: alert.createdAt,
+      });
+    }
 
     return res.status(200).json({ message: "Alert resolved successfully" });
   } catch (error) {

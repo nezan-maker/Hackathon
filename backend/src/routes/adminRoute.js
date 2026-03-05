@@ -1,6 +1,7 @@
 import express from "express";
 import {
   adminCreatePump,
+  adminConfirmPumpInstallation,
   adminListPumps,
   adminOverview,
 } from "../controllers/adminController.js";
@@ -13,6 +14,7 @@ const createAdminRoutes = () => {
   router.get("/overview", adminOverview);
   router.get("/pumps", adminListPumps);
   router.post("/pumps", adminCreatePump);
+  router.post("/pumps/:serial_id/confirm-installation", adminConfirmPumpInstallation);
 
   return router;
 };

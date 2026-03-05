@@ -39,6 +39,20 @@ const getResolvedRole = (email, currentRole = "user") => {
   return currentRole === "admin" ? "admin" : "user";
 };
 
+const getDisplayName = (name, email) => {
+  const normalized = String(name || "").trim();
+  if (normalized) return normalized;
+
+  const localPart = String(email || "").split("@")[0] || "";
+  const cleaned = localPart
+    .replace(/[^a-z0-9._-]/gi, " ")
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleaned || "FlowBot User";
+};
+
 const createMailerTransport = () => {
   if (!env.smtpUser || !env.smtpPass) {
     return null;
@@ -530,7 +544,7 @@ export const getCurrentUser = async (req, res) => {
 
     return res.status(200).json({
       id: String(user._id),
-      name: user.name,
+      name: getDisplayName(user.name, user.email),
       email: user.email,
       phone_number: user.phone_number,
       lat: user.lat,
