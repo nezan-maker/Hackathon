@@ -1,4 +1,8 @@
 const resolveDefaultApiUrl = (): string => {
+  if ((import.meta as any).env?.PROD) {
+    return 'https://hackathon-sks5.onrender.com';
+  }
+
   if (typeof window === 'undefined') {
     return 'http://localhost:5500';
   }
