@@ -48,7 +48,9 @@ export function PublicFooter({ isAuthenticated }: PublicFooterProps) {
                 to={isAuthenticated ? "/dashboard" : "/register"}
                 className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-blue-700"
               >
-                {isAuthenticated ? "Open Operations Dashboard" : "Create Account"}
+                {isAuthenticated
+                  ? "Open Operations Dashboard"
+                  : "Create Account"}
               </Link>
               <Link
                 to="/marketplace"
@@ -153,19 +155,19 @@ export function PublicFooter({ isAuthenticated }: PublicFooterProps) {
               <li className="flex items-center gap-2">
                 <Mail className="h-4 w-4 text-blue-600 dark:text-blue-300" />
                 <a
-                  href="mailto:support@flowbot.app"
+                  href="mailto:nielneza10@gmail.com"
                   className="transition-colors hover:text-blue-600"
                 >
-                  support@flowbot.app
+                  nielneza10@gmail.com
                 </a>
               </li>
               <li className="flex items-center gap-2">
                 <Phone className="h-4 w-4 text-blue-600 dark:text-blue-300" />
                 <a
-                  href="tel:+15550134000"
+                  href="tel:+250795652826"
                   className="transition-colors hover:text-blue-600"
                 >
-                  +1 (555) 013-4000
+                  +250 795 652 826
                 </a>
               </li>
               <li className="flex items-center gap-2">
@@ -174,7 +176,7 @@ export function PublicFooter({ isAuthenticated }: PublicFooterProps) {
               </li>
               <li className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-blue-600 dark:text-blue-300" />
-                <span>Global operations support hub</span>
+                <span>Local operations support hub</span>
               </li>
             </ul>
           </div>
@@ -185,19 +187,19 @@ export function PublicFooter({ isAuthenticated }: PublicFooterProps) {
             <p>&copy; {year} FlowBot. All rights reserved.</p>
             <div className="flex flex-wrap items-center gap-4">
               <a
-                href="mailto:support@flowbot.app?subject=Privacy%20Inquiry"
+                href="mailto:nielneza10@gmail.com?subject=Privacy%20Inquiry"
                 className="transition-colors hover:text-blue-600"
               >
                 Privacy
               </a>
               <a
-                href="mailto:support@flowbot.app?subject=Terms%20Request"
+                href="mailto:nielneza10@gmail.com?subject=Terms%20Request"
                 className="transition-colors hover:text-blue-600"
               >
                 Terms
               </a>
               <a
-                href="mailto:support@flowbot.app?subject=Security%20Question"
+                href="mailto:nielneza10@gmail.com?subject=Security%20Question"
                 className="transition-colors hover:text-blue-600"
               >
                 Security
