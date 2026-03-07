@@ -1,6 +1,5 @@
 import bcrypt from "bcrypt";
 import crypto from "crypto";
-import nodemailer from "nodemailer";
 import createDebug from "debug";
 import User from "../models/User.js";
 import { env } from "../config/env.js";
@@ -22,6 +21,10 @@ import {
   clearCsrfCookie,
   issueCsrfToken,
 } from "../middleware/csrfProtection.js";
+import {
+  getDefaultSenderAddress,
+  sendEmail,
+} from "../services/emailService.js";
 
 const debug = createDebug("app:auth");
 
@@ -53,30 +56,9 @@ const getDisplayName = (name, email) => {
   return cleaned || "FlowBot User";
 };
 
-const createMailerTransport = () => {
-  if (!env.smtpUser || !env.smtpPass) {
-    return null;
-  }
-
-  return nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
-    auth: {
-      user: env.smtpUser,
-      pass: env.smtpPass,
-    },
-  });
-};
-
 const sendVerificationEmail = async (email, otp) => {
-  const transporter = createMailerTransport();
-  if (!transporter) {
-    return false;
-  }
-
-  await transporter.sendMail({
-    from: env.smtpUser,
+  return sendEmail({
+    from: getDefaultSenderAddress(),
     to: email,
     subject: "FlowBot email verification code",
     text: `Your verification code is ${otp}. It expires in 8 minutes.`,
@@ -166,8 +148,6 @@ const sendVerificationEmail = async (email, otp) => {
   </tr>
 </table>`,
   });
-
-  return true;
 };
 
 const issueTokens = (user) => {

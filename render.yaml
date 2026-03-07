@@ -25,9 +25,9 @@ services:
         value: https://flowbot-backend.onrender.com
       - key: CORS_ORIGINS
         value: https://flowbot.onrender.com
-      - key: USER_NAME
+      - key: RESEND_API_NAME
         sync: false
-      - key: USER_PASS
+      - key: RESEND_API_KEY
         sync: false
       - key: ENABLE_MQTT
         value: "false"

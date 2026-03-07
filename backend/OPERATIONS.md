@@ -43,5 +43,5 @@
 2. Strong `AUTH_SECRET` / `REFRESH_SECRET` (32+ chars)
 3. `CORS_ORIGINS` set to real frontend domains only
 4. `ENABLE_MQTT` explicitly set
-5. SMTP credentials configured (or disable email-dependent flows)
+5. `RESEND_API_NAME` and `RESEND_API_KEY` configured for production email delivery
 6. Run CI green before deploy

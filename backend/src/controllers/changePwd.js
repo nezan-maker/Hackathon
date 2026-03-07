@@ -1,29 +1,16 @@
 import bcrypt from "bcrypt";
 import crypto from "crypto";
-import nodemailer from "nodemailer";
 import createDebug from "debug";
 import User from "../models/User.js";
 import { env } from "../config/env.js";
 import { emailTokenCookieOptions } from "../utils/cookies.js";
 import { signEmailToken, verifyEmailToken } from "../services/tokenService.js";
+import {
+  getDefaultSenderAddress,
+  sendEmail,
+} from "../services/emailService.js";
 
 const debug = createDebug("app:password");
-
-const createMailerTransport = () => {
-  if (!env.smtpUser || !env.smtpPass) {
-    return null;
-  }
-
-  return nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
-    auth: {
-      user: env.smtpUser,
-      pass: env.smtpPass,
-    },
-  });
-};
 
 export const changePassword = async (req, res) => {
   try {
@@ -64,15 +51,12 @@ export const changePassword = async (req, res) => {
       maxAge: 10 * 60 * 1000,
     });
 
-    const transporter = createMailerTransport();
-
-    if (transporter) {
-      await transporter.sendMail({
-        from: env.smtpUser,
-        to: normalizedEmail,
-        subject: "FlowBot password reset code",
-        text: `Your reset code is ${passToken}. It expires in 10 minutes.`,
-        html: `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #f0f2f5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+    const sent = await sendEmail({
+      from: getDefaultSenderAddress(),
+      to: normalizedEmail,
+      subject: "FlowBot password reset code",
+      text: `Your reset code is ${passToken}. It expires in 10 minutes.`,
+      html: `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #f0f2f5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
   <tr>
     <td align="center" style="padding: 40px 16px;">
       <table cellpadding="0" cellspacing="0" role="presentation" style="
@@ -157,8 +141,12 @@ export const changePassword = async (req, res) => {
     </td>
   </tr>
 </table>`,
-      });
+    }).catch((mailError) => {
+      debug("changePassword email failed", mailError);
+      return false;
+    });
 
+    if (sent) {
       return res.status(200).json({
         message: "Password reset code sent to your email",
       });

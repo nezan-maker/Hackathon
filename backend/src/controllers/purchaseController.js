@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import nodemailer from "nodemailer";
 import createDebug from "debug";
 import Pump from "../models/Pump.js";
 import { Alert } from "../models/Sensor.js";
@@ -13,25 +12,14 @@ import {
   getPaymentIntent,
   isStripeEnabled,
 } from "../services/stripeService.js";
+import {
+  getDefaultSenderAddress,
+  isEmailServiceConfigured,
+  sendEmail,
+} from "../services/emailService.js";
 
 const debug = createDebug("app:purchase");
 const INSTALL_CONFIRM_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-const createMailerTransport = () => {
-  if (!env.smtpUser || !env.smtpPass) {
-    return null;
-  }
-
-  return nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
-    auth: {
-      user: env.smtpUser,
-      pass: env.smtpPass,
-    },
-  });
-};
 
 const generateSerialId = () =>
   crypto.randomInt(0, 1000000).toString().padStart(6, "0");
@@ -697,34 +685,33 @@ export const purchasePump = async (req, res) => {
       serialId: pump.serial_id,
       token: installationConfirmationToken,
     });
-    const transporter = createMailerTransport();
     let buyerEmailSent = false;
     let adminEmailSent = false;
 
-    if (transporter) {
+    if (isEmailServiceConfigured()) {
+      const fromAddress = getDefaultSenderAddress();
       const adminRecipients = [...new Set(env.adminEmails.filter(Boolean))];
 
       const emailJobs = [
-        transporter
-          .sendMail({
-            from: env.smtpUser,
-            to: user.email,
-            subject: "FlowBot Pump Installation Confirmation",
-            text: [
-              "Your pump purchase is complete.",
-              `Product key: ${pump.serial_id}.`,
-              `Confirm installation: ${installationConfirmationLink}`,
-              "After confirmation, admin must approve installation before registration is enabled.",
-              `Registration page: ${registrationLink}`,
-            ].join("\n"),
-            html: buildInstallationConfirmationEmailHtml({
-              serialId: pump.serial_id,
-              installationConfirmationLink,
-              registrationLink,
-            }),
-          })
-          .then(() => {
-            buyerEmailSent = true;
+        sendEmail({
+          from: fromAddress,
+          to: user.email,
+          subject: "FlowBot Pump Installation Confirmation",
+          text: [
+            "Your pump purchase is complete.",
+            `Product key: ${pump.serial_id}.`,
+            `Confirm installation: ${installationConfirmationLink}`,
+            "After confirmation, admin must approve installation before registration is enabled.",
+            `Registration page: ${registrationLink}`,
+          ].join("\n"),
+          html: buildInstallationConfirmationEmailHtml({
+            serialId: pump.serial_id,
+            installationConfirmationLink,
+            registrationLink,
+          }),
+        })
+          .then((sent) => {
+            buyerEmailSent = sent;
           })
           .catch((mailError) => {
             debug("purchasePump buyer email failed", mailError);
@@ -733,19 +720,18 @@ export const purchasePump = async (req, res) => {
 
       if (adminRecipients.length > 0) {
         emailJobs.push(
-          transporter
-            .sendMail({
-              from: env.smtpUser,
-              to: adminRecipients.join(","),
-              subject: `FlowBot purchase: pump ${pump.serial_id}`,
-              text: [
-                `User ${user.email} purchased pump ${pump.serial_id}.`,
-                `Installation confirmation link: ${installationConfirmationLink}`,
-                `Registration link: ${registrationLink}`,
-              ].join("\n"),
-            })
-            .then(() => {
-              adminEmailSent = true;
+          sendEmail({
+            from: fromAddress,
+            to: adminRecipients,
+            subject: `FlowBot purchase: pump ${pump.serial_id}`,
+            text: [
+              `User ${user.email} purchased pump ${pump.serial_id}.`,
+              `Installation confirmation link: ${installationConfirmationLink}`,
+              `Registration link: ${registrationLink}`,
+            ].join("\n"),
+          })
+            .then((sent) => {
+              adminEmailSent = sent;
             })
             .catch((mailError) => {
               debug("purchasePump admin email failed", mailError);

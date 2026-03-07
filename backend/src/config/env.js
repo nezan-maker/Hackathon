@@ -51,6 +51,8 @@ export const env = {
   ),
   smtpUser: process.env.USER_NAME || "",
   smtpPass: process.env.USER_PASS || "",
+  resendApiName: toTrimmedString(process.env.RESEND_API_NAME),
+  resendApiKey: toTrimmedString(process.env.RESEND_API_KEY),
   frontendAppUrl: toTrimmedString(process.env.FRONTEND_APP_URL),
   backendAppUrl: toTrimmedString(process.env.BACKEND_APP_URL),
   trustProxy: process.env.TRUST_PROXY || (isProduction ? "1" : "loopback"),
