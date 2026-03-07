@@ -13,6 +13,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { PublicThemeToggle } from "../components/PublicThemeToggle";
 import { FlowBotLogo } from "../components/FlowBotLogo";
+import { PublicFooter } from "../components/PublicFooter";
 
 export function Landing() {
   const { isAuthenticated } = useAuth();
@@ -166,7 +167,10 @@ export function Landing() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+      <section
+        id="capabilities"
+        className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8"
+      >
         <h2 className="mb-4 text-center text-3xl font-bold text-slate-900 dark:text-slate-100 sm:text-4xl">
           Platform Capabilities
         </h2>
@@ -196,7 +200,7 @@ export function Landing() {
         </div>
       </section>
 
-      <section className="bg-slate-50 py-24 dark:bg-slate-900/60">
+      <section id="workflow" className="bg-slate-50 py-24 dark:bg-slate-900/60">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <h2 className="mb-4 text-center text-3xl font-bold text-slate-900 dark:text-slate-100 sm:text-4xl">
             How FlowBot Works
@@ -231,7 +235,10 @@ export function Landing() {
         </div>
       </section>
 
-      <section className="bg-gradient-to-r from-slate-100 via-blue-100 to-slate-100 py-20 dark:from-slate-900 dark:via-blue-900 dark:to-slate-900">
+      <section
+        id="get-started"
+        className="bg-gradient-to-r from-slate-100 via-blue-100 to-slate-100 py-20 dark:from-slate-900 dark:via-blue-900 dark:to-slate-900"
+      >
         <div className="mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
           <h2 className="mb-6 text-3xl font-bold text-slate-900 dark:text-white sm:text-4xl">
             Start With the Pump Marketplace
@@ -259,17 +266,7 @@ export function Landing() {
         </div>
       </section>
 
-      <footer className="bg-slate-100 py-12 text-slate-600 dark:bg-slate-900 dark:text-slate-400">
-        <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
-          <div className="mb-4 flex items-center justify-center">
-            <FlowBotLogo
-              size="md"
-              textClassName="text-slate-900 dark:text-white"
-            />
-          </div>
-          <p>&copy; 2026 FlowBot. All rights reserved.</p>
-        </div>
-      </footer>
+      <PublicFooter isAuthenticated={isAuthenticated} />
     </div>
   );
 }

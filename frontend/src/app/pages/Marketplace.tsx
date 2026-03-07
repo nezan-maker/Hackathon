@@ -11,6 +11,7 @@ import { useAuth } from "../context/AuthContext";
 import { PublicThemeToggle } from "../components/PublicThemeToggle";
 import { PumpLoadingIndicator } from "../components/PumpLoadingIndicator";
 import { FlowBotLogo } from "../components/FlowBotLogo";
+import { PublicFooter } from "../components/PublicFooter";
 
 interface PumpModel {
   id: string;
@@ -320,6 +321,8 @@ export function Marketplace() {
           </div>
         )}
       </section>
+
+      <PublicFooter isAuthenticated={isAuthenticated} />
     </div>
   );
 }
