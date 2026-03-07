@@ -1,4 +1,5 @@
 import dns from "dns"
+dns.setDefaultResultOrder('ipv4first');
 import express from "express";
 import cookieParser from "cookie-parser";
 import http from "http";
@@ -31,7 +32,7 @@ import { reportError } from "./services/errorReporter.js";
 import { setSocketIo } from "./services/socketService.js";
 import { isAdminUser } from "./utils/accessControl.js";
 import { ADMIN_MONITOR_ROOM, userMonitorRoom } from "./utils/realtimeRooms.js";
-dns.setDefaultResultOrder('ipv4first');
+
 
 const debug = createDebug("app:server");
 
